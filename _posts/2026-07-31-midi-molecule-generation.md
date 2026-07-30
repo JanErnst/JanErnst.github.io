@@ -1,7 +1,7 @@
 ---
 title: 'MiDi: Mixed Graph and 3D Denoising Diffusion for Molecule Generation'
 date: 2026-07-31
-permalink: /posts/2012/08/blog-post-4/
+permalink: /posts/2026/07/midi-molecule-generation/
 tags:
   - Diffiusion
   - category1
