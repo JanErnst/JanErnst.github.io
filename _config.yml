@@ -9,7 +9,7 @@
 # Basic Site Settings
 locale                   : "en-US"
 site_theme               : "default" # The available themes options are "default", "air", "sunrise", "mint", "dirt" and "contrast"
-title                    : "Jan Ernst / MiDi: Mixed Graph and 3D Denoising Diffusion
+title                    : "Jan Ernst - Master AI & Data Science"
 for Molecule Generation"
 title_separator          : "-"
 name                     : &name "Jan Ernst"

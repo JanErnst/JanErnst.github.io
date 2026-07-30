@@ -1,15 +1,16 @@
 ---
-title: 'Future Blog Post'
-date: 2199-01-01
+title: 'MiDi: Mixed Graph and 3D Denoising Diffusion for Molecule Generation'
+date: 2026-07-31
 permalink: /posts/2012/08/blog-post-4/
 tags:
-  - cool posts
+  - Diffiusion
   - category1
   - category2
 ---
 
 
-Introduction 
+Introduction
+======
 
 Designing new molecules is a central challenge in modern drug discovery. A useful generative model should not only propose atoms in 3D space, but also understand how those atoms are connected by chemical bonds. Both views matter: the molecular graph tells us which atoms are bonded and what functional groups are present, while the 3D conformation determines how the molecule can interact with proteins and other biological targets. 
 
@@ -20,10 +21,11 @@ The paper MiDi: Mixed Graph and 3D Denoising Diffusion for Molecule Generation a
 In this blog post, we will build up the motivation behind MiDi, explain why molecule generation needs both graph and 3D information, and look at how the model combines discrete diffusion for chemical structure with Gaussian diffusion for spatial coordinates. Finally, we will discuss why this joint approach leads to much more stable molecules on challenging drug-like datasets. 
 
  
-
-Motivation  
+Motivation
+====== 
 
 Background knowledge 
+======
 
 To fully understand the process and architecture we wil now venture into the basic background knowledge needed to build MiDi. 
 
@@ -33,15 +35,18 @@ Graph structure
 
 Previous works on the generation of molecules have already proven the efficency of graph structures. MiDi is no diffrence in that regard and does also represent its molecuels as a graph. A graph consists of nodes and edges between the nodes. Both are described by their features. In the case of MiDi each molecule is a graph G with 0 
 
-33333,003  
 
-    Equivariance  
+Equivariance:
+------
 
-Diffusion: 
+Diffusion:
+------ 
 
 As the paper title states MiDi is a denoising diffusion model, which does resamble the structure of a decoder encoder model, where only the decoder is used for inference. However, it is still crucial to understand the complete pipeline to to get behind the how MiDi does what it does. The first part of a Denoising Diffusion model is Diffusion, which is refrenced as the noise model, and the second part is the Denoising model that generates the mixed graph molecule. 
 
-Noise model: 
+Architecture
+======
+Noise model:
 
 The sole purpose of a noise model is to incrementally apply noise to  the input x so that each step is a more currupted version of the previous step. This results in a markovian trajectory in the form of: 
 
@@ -54,8 +59,7 @@ As already explained in previous sections, MiDi generates a graph that is descri
 Atom type X, bond type Y and formal charge C get discrete noise that is defined by the transition matrix Q that has been derived from the marginal distribution of the training sets for each feature. To ensure that the generated molecule stays centered in the subspace the total amount of applied gaussian noise has to always add up to 0. This ensures that the input and outpur are roto-translation equivariant during training and inference.  
 
  
-
- The parameter α defines how much of the input remains in a single noise step and is changed during training according to the newly introduced adaptive noise schedule. Even tough MiDi must balance all features of the graph to generate a stable molecule, atom coordinates and bond types have less flexibility in that regard and cannot be derived from atom type and formal charge. This is why during the noise application α for coordinates and bond type decreases slower than for atom type and formal charge. In the next chapter we will discuss what this means for the inference step, after exploring the architecture of the denoising model. 
+The parameter α defines how much of the input remains in a single noise step and is changed during training according to the newly introduced adaptive noise schedule. Even tough MiDi must balance all features of the graph to generate a stable molecule, atom coordinates and bond types have less flexibility in that regard and cannot be derived from atom type and formal charge. This is why during the noise application α for coordinates and bond type decreases slower than for atom type and formal charge. In the next chapter we will discuss what this means for the inference step, after exploring the architecture of the denoising model. 
 
 Denoising model: 
 
@@ -71,13 +75,15 @@ Firstly, we are going to explore the architecture. On the first level the denois
 
     loss 
 
-Experiments 
+Experiments:
+======
 
 After introducing the model, the most important question is whether generating the molecular graph and the 3D conformation together actually helps. MiDi is evaluated on unconditional molecule generation: the model is not asked to optimize a specific property or binding pocket, but simply to sample realistic molecules from the learned distribution. 
 
 This setting is useful because it isolates the core ability of the model. A good molecule generator should not only place atoms in plausible 3D positions, but also assign chemically meaningful bonds, atom types, and formal charges. In previous 3D diffusion models, the graph is usually reconstructed after generation, for example by looking at interatomic distances or by using chemistry software such as OpenBabel. MiDi instead predicts the graph and the conformation during the same denoising process. 
 
-Experimental setup 
+Experimental setup
+------
 
 The authors compare MiDi against 3D molecule generators followed by a separate bond prediction step. The main baseline is EDM, a previous equivariant diffusion model for 3D molecule generation. Since EDM only generates atom types and coordinates, bonds must be added afterwards. The paper considers two variants: EDM with a simple distance-based lookup table, and EDM followed by OpenBabel, which tries to optimize bond orders to make the molecule chemically valid. 
 
@@ -99,7 +105,8 @@ Finally, MiDi is also evaluated as a 3D generator. The authors compare bond leng
 
  
 
-Results 
+Results
+------
 
 The central question of the experiments is: does it actually help to generate the molecular graph and the 3D conformation together? 
 
