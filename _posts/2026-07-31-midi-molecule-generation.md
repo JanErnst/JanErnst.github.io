@@ -15,7 +15,7 @@ When designing a new drug, scientists often have to generate a new molecule that
 
 We will build up the motivation behind MiDi, explain why molecule generation needs both graph and 3D information, and look at how the model combines discrete diffusion for chemical prpoerties with Gaussian diffusion for spatial coordinates. Finally, we will discuss why this joint approach leads to much more stable molecules on challenging drug-like datasets compared to similar models.
 
-To do so, we will first discuss why it even makes sense to use neural networks for molecule generation, and cover the most important basics needed to understand how MiDi works and what is important when creating a molecule. 
+To do so, we will first discuss why it even makes sense to use neural networks for molecule generation, and cover the most important basics needed to understand how MiDi works and what is important when creating a molecule.
 
 Why even consider deep learning?
 ======
@@ -56,11 +56,17 @@ To fully understand the process and architecture, we will now cover the backgrou
 Molecules as graphs
 ------
 
-Previous works on molecule generation have already demonstrated the efficiency of graph structures. MiDi is no different in this regard and also represents its molecules as a graph. A graph generally consists of nodes and edges connecting them. Nodes represent the atoms of a molecule, the edges are the bonds between them, and both are described by their features. In the case of MiDi, each molecule built from $n$ atoms is represented as the graph $G = (\mathbf{X},\mathbf{C},\mathbf{R},\mathbf{Y})$ with $\mathbf{X}$ as the atom type and $\mathbf{C}$ as their formal charge, which are both one-hot encoded vectors of length $n$. $\mathbf{R}\in\mathbb{R}^{3 \times n}$ are the three-dimensional coordinates of all $n$ atoms and $\mathbf{Y}$ are the bond types between them, saved as an $n \times n$ matrix. Notably, having no bond is also considered to be a bond type. Looking at Figure ..., it becomes obvious why this representation fits a molecule well and intuitively.
+Previous works on molecule generation have already demonstrated the efficiency of graph structures. MiDi is no different in this regard and also represents its molecules as a graph. A graph generally consists of nodes and edges connecting them. Nodes represent the atoms of a molecule, the edges are the bonds between them, and both are described by their features. In the case of MiDi, each molecule built from $n$ atoms is represented as the graph $G = (\mathbf{X},\mathbf{C},\mathbf{R},\mathbf{Y})$ with $\mathbf{X}$ as the atom type and $\mathbf{C}$ as their formal charge, which are both one-hot encoded vectors of length $n$. $\mathbf{R}\in\mathbb{R}^{3 \times n}$ are the three-dimensional coordinates of all $n$ atoms and $\mathbf{Y}$ are the bond types between them, saved as an $n \times n$ matrix. Notably, having no bond is also considered to be a bond type. Looking at Figure 1 again, it becomes obvious why this representation fits a molecule well and intuitively.
 
 E(3)-Equivariance
 ------
-When generating any structure in 3D space, we must always respect its dynamic nature. Molecules do not have a general order or fixed sequence and can undergo translation and rotation in space. This does not affect their functionality, type, or features — except the coordinates of each atom when referenced to the same origin point. A molecule generator should therefore be able to generate the same molecule regardless of how the input is positioned in space. This is where the concept of equivariance comes into play. Equivariance holds when any transformation of the input results in the same transformation of the output. So when we rotate the input graph $G_1$ from Figure ..., the corresponding outputs rotate equally. This also eliminates the need for randomly augmented training data, as all those samples become redundant.
+When generating any structure in 3D space, we must always respect its dynamic nature. Molecules do not have a general order or fixed sequence and can undergo translation and rotation in space. This does not affect their functionality, type, or features — except the coordinates of each atom when referenced to the same origin point. A molecule generator should therefore be able to generate the same molecule regardless of how the input is positioned in space. This is where the concept of equivariance comes into play. Equivariance holds when any transformation of the input results in the same transformation of the output. So when we rotate the first input graph from Figure 3, the corresponding outputs rotate equally. This also eliminates the need for randomly augmented training data, as all only rotated samples become redundant. For MiDi we do consider E(3)-equivariance, which is equivariance in three-dimenonal space.
+
+<figure>
+  <img src="/images/equivariance.jpg" alt="Diagram showing that rotating the input graph by a transformation S_g and then passing it through the network gives the same result as first passing the original input through the network and then rotating the output by the same transformation." style="display:block; margin:auto; width:80%"/>
+  <figcaption style="text-align:center">Figure 3: The original input graph (top-left) is rotated by $S_g$ to produce a second input graph (top-right). Both graphs are processed by the neural network $\phi$. The key insight is that the second output (bottom-right) can be derived directly from the first output (bottom-left) by applying the same rotation $T_g = S_g$ — the network does not need to see every possible orientation during training. Source: <a href="https://arxiv.org/abs/2106.09645">E(n) Equivariant Graph Neural Networks (Satorras et al., 2021)</a>
+  </figcaption>
+</figure>
 
 Transformers
 ------
@@ -87,8 +93,8 @@ $$
 This process results in a completely noised output, as shown in Figure ...
 
 <figure>
-  <img src="/images/Diffusion.png" alt="Diffusion" style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 1: Noise Process on cat.</figcaption>
+  <img src="/images/Diffusion.png" alt="A sequence of images showing a cat being progressively corrupted by Gaussian noise over T timesteps until the original image is completely unrecognizable." style="display:block; margin:auto; width:80%"/>
+  <figcaption style="text-align:center">Figure 4: The forward noise process illustrated on an image. Starting from the clean input $G^0$ on the left, noise is added step by step until the original structure is completely destroyed at step $T$ on the right. The denoising model learns to reverse this process.</figcaption>
 </figure>
 
 As already explained in previous sections, MiDi generates a graph described by its edges and node features. The 3D coordinates are continuous values while the remaining features are discrete values. The corresponding noise is therefore either continuous Gaussian noise or discrete noise, resulting in the following combined noise at each step:
@@ -138,8 +144,8 @@ Atom type $\mathbf{X}$, bond type $\mathbf{Y}$, and formal charge $\mathbf{C}$ r
 The parameter $\alpha$ defines how much of the input remains after a single noise step and is adjusted during training according to the newly introduced adaptive noise schedule. Even though MiDi must balance all features of the graph to generate a stable molecule, atom coordinates and bond types have less flexibility in this regard, as they cannot be derived from atom type and formal charge alone. This is why, during noise application, $\alpha$ for coordinates and bond type decreases more slowly than for atom type and formal charge.
 
 <figure>
-  <img src="/images/adaptive_cosine_schedule-1.png" alt="Adaptive cosine noise schedule" style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 1: Adaptive cosine noise schedule.</figcaption>
+  <img src="/images/adaptive_cosine_schedule-1.png" alt="Plot of the adaptive cosine noise schedule showing that alpha decreases more slowly for atom coordinates and bond types than for atom types and formal charges across the T diffusion timesteps." style="display:block; margin:auto; width:80%"/>
+  <figcaption style="text-align:center">Figure 5: The adaptive cosine noise schedule. Atom coordinates and bond types (blue) retain more of their original signal for longer than atom types and formal charges (orange). This reflects the fact that coordinates and connectivity are harder to recover and should therefore be corrupted more gradually.</figcaption>
 </figure>
 
 In the next chapter, we will discuss what this means for the inference step, after exploring the architecture of the denoising model.
@@ -301,15 +307,15 @@ So far not a real improvement
 ------
 
 <figure>
-  <img src="/images/qm9_molecule.png" alt="qm9_molecule" style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 2: Results for molecule metrics on QM9.</figcaption>
+  <img src="/images/qm9_molecule.png" alt="Table of molecule generation metrics on QM9 comparing EDM, EDM with OpenBabel, and MiDi with adaptive noise schedule across stability, validity, uniqueness, novelty, and connectedness." style="display:block; margin:auto; width:80%"/>
+  <figcaption style="text-align:center">Figure 6: Molecule generation metrics on QM9. MiDi with the adaptive noise schedule improves over the base EDM model on stability, validity, and connectedness. OpenBabel-assisted EDM remains a strong competitor on this simpler dataset, where bond types can often be inferred from atom distances alone.</figcaption>
 </figure>
 
 On the smaller QM9 dataset, the comparison EDM networks already perform quite well, both with and without their assistive software. This is not too surprising: QM9 molecules are small and their bonds can often be recovered from atom distances without much ambiguity. Still, MiDi improves over the base EDM model on molecule stability, atom stability, validity, and connectedness, though only by a small margin. With the adaptive noise schedule, MiDi reaches $97.5\%$ molecular stability and $97.9\%$ validity, while EDM reaches $90.7\%$ molecular stability and $91.7\%$ validity. OpenBabel further improves EDM's performance, which leads to an even smaller margin.
 
 <figure>
-  <img src="/images/distribution_qm9.png" alt="distribution_qm9" style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 1: Wasserstein distance on QM9.</figcaption>
+  <img src="/images/distribution_qm9.png" alt="Bar chart comparing the Wasserstein distances for valency, atom type, bond type, bond angle, and bond length distributions on QM9 between EDM, EDM with OpenBabel, and MiDi." style="display:block; margin:auto; width:80%"/>
+  <figcaption style="text-align:center">Figure 7: Wasserstein distances of the marginal distributions on QM9 (lower is better). MiDi improves on valency, atom, and bond type distributions, while EDM still produces slightly more realistic bond angles and lengths for these small molecules.</figcaption>
 </figure>
 
 Looking at the Wasserstein distances of the marginal distributions, we can see a similar pattern — remember that we want a small distance between the distributions. Valency, atom, and bond diversity have already improved when using MiDi, but this changes when we look at the bond angles and lengths. Apparently, when generating small molecules, EDM generates more realistic 3D information, which is not surprising as EDM's main task is to generate coordinates and not the complete 2D and 3D structure of a molecule. If we stopped here, we could already say that MiDi is able to compete with state-of-the-art models, even if it does not always surpass them — especially when they are combined with additional software. But this is already a significant finding, because MiDi is able to generate both 2D and 3D stable structures while being end-to-end differentiable.
@@ -319,15 +325,15 @@ Lets make it more difficult
 Now that we have seen the results on the small dataset, I am sure you are as excited as I am to look at the realistic GEOM-DRUGS dataset.
 
 <figure>
-  <img src="/images/geom_molecule.png" alt="geom_molecule" style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 1: Results for molecule metrics on GEOM-Drugs.</figcaption>
+  <img src="/images/geom_molecule.png" alt="Table of molecule generation metrics on GEOM-DRUGS comparing EDM, EDM with OpenBabel, and MiDi with adaptive noise schedule, showing a dramatic improvement in molecular stability for MiDi." style="display:block; margin:auto; width:80%"/>
+  <figcaption style="text-align:center">Figure 8: Molecule generation metrics on GEOM-DRUGS. The advantage of MiDi's joint generation becomes clear here: while EDM alone achieves only $5.5\%$ molecular stability, MiDi reaches $91.6\%$ — showing that generating graph and 3D structure together is essential for drug-like molecules.</figcaption>
 </figure>
 
 This dataset contains larger, drug-like molecules with many more atoms and more complex structures. Here, the limitations of the two-step approach become obvious. EDM can generate reasonable-looking 3D point clouds, but when bonds are inferred afterwards, only $5.5\%$ of the resulting molecules are molecularly stable. Adding OpenBabel helps, increasing molecular stability to $40.3\%$, but this still leaves most generated molecules chemically problematic. MiDi performs much better on this harder benchmark. The adaptive version generates $91.6\%$ molecularly stable molecules, while also keeping atom stability close to the data distribution at $99.8\%$. This is the main result of the paper: jointly denoising the graph and the coordinates allows the model to learn chemistry and geometry as a coupled object, rather than treating bond prediction as an afterthought. In the end, MiDi is able to outperform EDM with and without OpenBabel on every molecule metric except Validity, where MiDi only reaches $77.8\%$.
 
 <figure>
-  <img src="/images/distribution_qm9.png" alt="distribution_qm9" style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 1: Wasserstein distance on QM9.</figcaption>
+  <img src="/images/distribution_qm9.png" alt="Bar chart comparing the Wasserstein distances for valency, atom type, bond type, bond angle, and bond length distributions on GEOM-DRUGS between EDM, EDM with OpenBabel, and MiDi." style="display:block; margin:auto; width:80%"/>
+  <figcaption style="text-align:center">Figure 9: Wasserstein distances of the marginal distributions on GEOM-DRUGS (lower is better). MiDi produces substantially more realistic bond angles and valency distributions than both EDM variants, confirming that jointly learning graph structure and 3D geometry leads to chemically more consistent molecules.</figcaption>
 </figure>
 
 The 3D metrics show the same trend. On GEOM-DRUGS, MiDi produces much more realistic bond angles than EDM or EDM followed by OpenBabel. The bond-angle Wasserstein distance drops from around $6°$ for the baselines to $1.07°$ for adaptive MiDi. The valency distribution is also much closer to the test set, which means the generated atoms satisfy atom bonding rules more consistently.
