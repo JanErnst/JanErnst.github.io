@@ -31,7 +31,8 @@ Before I can answer this questions, I have to tell you something important about
 
 <figure>
   <img src="/images/mixed_graph.jpg" alt="mixed graph" style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 1: Example for 2D and single 3D structue of a molecule <a href="https://www.drugdiscoverytrends.com/figuring-out-the-3-d-shape-of-molecules-with-a-push-of-a-button/​">.</figcaption>
+  <figcaption style="text-align:center">Figure 1: Example for 2D and single 3D structue of a molecule <a href="https://www.drugdiscoverytrends.com/figuring-out-the-3-d-shape-of-molecules-with-a-push-of-a-button/​">Vignac et al. (2023)</a>.
+  </figcaption>
 </figure>
 
 Generating only the 2D graph is a research field that has already been explored well and it is possible to generate the a conformer with an additional generator or algorithm. Even though 3D structure molecule generators are not researched as well and deliver now information on the bond type, the reverse process is also possible. One example for a 3D-only generator is the Equivariant Diffusion Model (EDM). When combining it with the chemical software OpenBabel, that predicts the resulting 2d graph, we get both pictures, just not with a single but with multiple steps. This is often not desirable as it gives more room for errors accros the chain of events and is less practical.
@@ -288,7 +289,7 @@ Finally, MiDi is also evaluated as a 3D generator. The authors compare bond leng
 
 Does MiDi work?
 ======
-Shortly, Yes! We now know how MiDi works and establised a foundation to test its performance. Lets first have a look on the smaller, simpler dataset. The following table give a good picture to compare the diffrent results. Remember, that EDM does only generate 3D structures with atoms, but no bond types. We will focus on the EMD model without additional software, EDM with help from OpenBabel to generate fitting bonds and the MiDi model with adaptive noise schedule. These results always show the comparison between the test and the generated set. The data part of the results compare the test with the training set to show the generalization ability of MiDi.
+Shortly, Yes, but how well exactly! We now know how MiDi works and establised a foundation to test its performance. Lets first have a look on the smaller, simpler dataset. The following table give a good picture to compare the diffrent results. Remember, that EDM does only generate 3D structures with atoms, but no bond types. We will focus on the EMD model without additional software, EDM with help from OpenBabel to generate fitting bonds and the MiDi model with adaptive noise schedule. These results always show the comparison between the test and the generated set. The data part of the results compare the test with the training set to show the generalization ability of MiDi.
 
 So far not a real improvement
 ------
