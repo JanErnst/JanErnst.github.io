@@ -9,25 +9,47 @@ tags:
 ---
 
 
-Introduction
+Introduction to MiDi
 ======
-When designing a new drug scientist often have to generate a new molecule that not only is stable but also does cross every consition necessary for the effect and since the explosive rise of generative model it is now wonder that those topics have been combined in reserch. 
-
-
-A useful generative model should not only propose atoms in 3D space, but also understand how those atoms are connected by chemical bonds. Both views matter: the molecular graph tells us which atoms are bonded and what functional groups are present, while the 3D conformation determines how the molecule can interact with proteins and other biological targets.
-
-Many previous approaches treat these two aspects separately. Some models generate only the 2D molecular graph, ignoring the spatial arrangement of atoms. Others generate a 3D point cloud first and then recover the bond structure afterward using hand-crafted rules or external chemistry software. This separation is limiting: the resulting pipeline is no longer fully differentiable, and errors in the post-processing step can easily turn a promising 3D structure into an invalid molecule.
-
-Why even consider deep learning?
-======
-The paper MiDi: Mixed Graph and 3D Denoising Diffusion for Molecule Generation addresses this problem with a single diffusion model that generates both parts of a molecule together. MiDi represents a molecule as a graph embedded in 3D space, with atom types, formal charges, bond types, and coordinates all denoised jointly. The key idea is simple but powerful: instead of asking the model to learn geometry first and chemistry later, train it to learn the relationship between geometry and chemistry throughout the entire generation process.
+When designing a new drug scientist often have to generate a new molecule that not only is stable but also does cross every consition necessary for the effect and since the explosive rise of generative model it is now wonder that those topics have been combined in reserch. The authors Vignac, Osman, Toni & Frossard wanted to tackle this task to and presented us in their paper *MiDi: **Mi**xed Graph and 3D Denoising **Di**ffusion for Molecule Generation* their model MiDi. In this Blogpost I want to recasulate on the architecture, novelties and results that MiDi has. 
 
 In this blog post, we will build up the motivation behind MiDi, explain why molecule generation needs both graph and 3D information, and look at how the model combines discrete diffusion for chemical structure with Gaussian diffusion for spatial coordinates. Finally, we will discuss why this joint approach leads to much more stable molecules on challenging drug-like datasets.
 
-We have to talk about some basics first.
+To do so, we will first discuss why it even makes sense to use neural networks for molecule generation, and repeat the most important basics to understand how MiDi works and what is important when creating a molecule. Afterwards we take a deeper look into MiDis architecture and new features, to then compare it with, at the time, state of the art models that try to do the same.
+
+Why even consider deep learning?
 ======
 
-To fully understand the process and architecture, we will now cover the background knowledge needed to understand the function, achitecture and specialties of MiDi.
+When we think about generating molecules we can reformulate it to a search problem with a new dimension for each feature of a molecule. The features that interest us here are number of atoms, type of atoms, type of bond between atoms, 3 dimentional structure. When we now take a average sized drug of $40$ atoms we can already see how this results in an enourmous search space of different combinations. Even if only a small amount of all elements are actually used for drug synthesizing the possible structe in our 3D space is near limitless. This search space would increase even further if we include special groups of atoms, but we will not talk about that further. So at this point we can clearly say that randomly taking a possible molecule will most likely not result in a new drug.
+
+From all the chemical knowledge we, of course, already know that not all combinations are possible and can therefore reduce the space by applying rules and constraints that apply to stable molecules. This opens the possibility of creating heuristic rulesets or algorithms to generate a molecule, right? Yes, but that really only works for small molecules. The larger a molecule gets the more complex its configuration becomes resulting in harder and harder prediction of its attributes and properties. Every new change can destabilize the atom and there is no one order to follow when creating a molecule.
+
+
+What is special about MiDi?
+======
+Before I can answer this questions, I have to tell you something important about molecules. Molecules are often depicted as two dimensional graphs like in figure 1. These representations define the chemical properties, bond and atom types, and functional groups that are essential for drugs. They are also important, because scientist can derive the synthetuc path from this graph. But this is not enough: If we now have a fixed 2D graph we can create multiple fitting 3D arrangements, called conformers. The three dimensional structre defines how the molecule interacts with other molecules, controls its biological activity and binding affinity to proteins.
+
+<figure>
+  <img src="/images/mixed_graph.jpg" alt="mixed graph" style="display:block; margin:auto; width:80%"/>
+  <figcaption style="text-align:center">Figure 1: Example for 2D and single 3D structue of a molecule <a href="https://www.drugdiscoverytrends.com/figuring-out-the-3-d-shape-of-molecules-with-a-push-of-a-button/​">.</figcaption>
+</figure>
+
+Generating only the 2D graph is a research field that has already been explored well and it is possible to generate the a conformer with an additional generator or algorithm. Even though 3D structure molecule generators are not researched as well and deliver now information on the bond type, the reverse process is also possible. One example for a 3D-only generator is the Equivariant Diffusion Model (EDM). When combining it with the chemical software OpenBabel, that predicts the resulting 2d graph, we get both pictures, just not with a single but with multiple steps. This is often not desirable as it gives more room for errors accros the chain of events and is less practical.
+
+This is the point where MiDi comes on the stage. Unlike before MiDi is the first model that is able to generate both the 2d and 3d struture of an molecule given only the number of atoms. It is therefore the first model that is end-to-end differentiable in this field and can optimize the entire task. This allows the model to learn all properties of a molecule while balancing the diffent effects of the 2 and 3 dimensional arrangement. 
+
+<figure>
+  <img src="/images/selected_samples1.png" alt="selected_samples1" style="display:block; margin:auto; width:80%"/>
+  <figcaption style="text-align:center">Figure 1: Example output from MiDi.</figcaption>
+</figure>
+
+In the figure above I give you a first glance at the fenerated molecules from MiDi, so ypu can imagin the 2D and 3D structures we are taklking about in this post. Little side note: This is where the *Mixed* (Mi) in the name comes from.
+
+
+We have to talk about some basics now.
+======
+
+To fully understand the process and architecture, we will now cover the background knowledge needed to understand the function, achitecture and novelties of MiDi.
 
 Molecules as graphs
 ------
@@ -224,7 +246,7 @@ $$
 $$
 
 
-Experiments:
+How was MiDi tested?
 ======
 
 After introducing the model, the most important question is whether generating the molecular graph and the 3D conformation together actually helps. MiDi is evaluated on unconditional molecule generation: the model is not asked to optimize a specific property or binding pocket, but simply to sample realistic molecules from the learned distribution.
@@ -241,7 +263,7 @@ The experiments are performed with explicit hydrogen atoms, which makes the task
 | Information | QM9 | GEOM-DRUGS |
 |---|---|---|
 | **Dataset type** | Standard benchmark of small molecules | Large dataset of drug-sized, drug-like molecules |
-| **Number of molecules** | Approximately **133,000** molecules | Approximately **430,000** molecules |
+| **Number of molecules** | **133,000** molecules | **430,000** molecules |
 | **Molecule size** | Up to **9 heavy atoms** per molecule | Average of **44 atoms**, with up to **181 atoms** |
 
 QM9 has a lot less samples and contains small molecules with up to 9 heavy atoms, which are all atoms except hydrogen. The evaluation of for MiDi was done with full molecules, so with the additional heavy atoms. The GEOM-DRUGS data set on the other side is much more challenging and closer to realistic drug molecules. It contains around 430,000 drug-sized molecules, with an average of 44 atoms and up to 181 atoms. The evaluation combines metrics for the molecule structue and general dsitribution of the generated molecules compared to the training data. The following table explains a bit more in detail what each metric means, first the six molecule metricies and then the five generated distributions.
@@ -264,9 +286,9 @@ For general molecule generation properties, the paper reports standard metrics s
 
 Finally, MiDi is also evaluated as a 3D generator. The authors compare bond length and bond angle distributions between generated molecules and real molecules. This is important because a model could generate a valid graph but still place atoms in unrealistic 3D arrangements. Similar to the previous paragraph, these metricies are also compared with the Wasserstein distance.
 
-Results
+Does MiDi work?
 ======
-We now know how MiDi works and establised a foundation to test its performance. Lets first have a look on the smaller, simpler dataset. The following table give a good picture to compare the diffrent results. Remember, that EDM does only generate 3D structures with atoms, but no bond types. We will focus on the EMD model without additional software, EDM with help from OpenBabel to generate fitting bonds and the MiDi model with adaptive noise schedule. These results always show the comparison between the test and the generated set. The data part of the results compare the test with the training set to show the generalization ability of MiDi.
+Shortly, Yes! We now know how MiDi works and establised a foundation to test its performance. Lets first have a look on the smaller, simpler dataset. The following table give a good picture to compare the diffrent results. Remember, that EDM does only generate 3D structures with atoms, but no bond types. We will focus on the EMD model without additional software, EDM with help from OpenBabel to generate fitting bonds and the MiDi model with adaptive noise schedule. These results always show the comparison between the test and the generated set. The data part of the results compare the test with the training set to show the generalization ability of MiDi.
 
 So far not a real improvement
 ------
