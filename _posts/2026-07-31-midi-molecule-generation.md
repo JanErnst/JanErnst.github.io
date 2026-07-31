@@ -241,16 +241,28 @@ The experiments are performed with explicit hydrogen atoms, which makes the task
 | **Number of molecules** | Approximately **133,000** molecules | Approximately **430,000** molecules |
 | **Molecule size** | Up to **9 heavy atoms** per molecule | Average of **44 atoms**, with up to **181 atoms** |
 
-QM9 has a lot less samples and contains small molecules with up to 9 heavy atoms, which are all atoms except Hydrogen. The GEOM-DRUGS data set on the other side is much more challenging and closer to realistic drug discovery. It contains around 430,000 drug-sized molecules, with an average of 44 atoms and up to 181 atoms. The evaluation combines graph-based and geometry-based metrics.
+QM9 has a lot less samples and contains small molecules with up to 9 heavy atoms, which are all atoms except hydrogen. The evaluation of for MiDi was done with full molecules, so with the additional heavy atoms. The GEOM-DRUGS data set on the other side is much more challenging and closer to realistic drug molecules. It contains around 430,000 drug-sized molecules, with an average of 44 atoms and up to 181 atoms. The evaluation combines metrics for the molecule structue and general dsitribution of the generated molecules compared to the training data. The following table explains a bit more in detail what each metric means, first the six molecule metricies and then the five generated distributions.
 
-For the graph structure, the paper reports standard molecule generation metrics such as validity, uniqueness, novelty, and connectedness. Validity is measured using RDKit sanitization. The authors also report atom stability and molecule stability, which check whether valency constraints are satisfied without adding implicit hydrogens. 
+| Metric | Description |
+|---|---|
+| **Molecule stability** | The molecule resitis changing into other substances and does not break apart on its own. |
+| **Atom stability** | The atoms nucleus and electron arrangement are balanced and will not spontaneously change or break apart. |
+| **Validity** | Success rate of the RDKit sanitization pipeline over $10{,}000$ molecules. This definesif the molecule is chemically valid. |
+| **Uniqueness** | Proportion of valid generates molecules with different canonical SMILES. SMILES is a way to write a molecule in a simple line of text and therefore shows the diversity of the generated molecules. This inludes molecules that are already presetn in the training data. |
+| **Novelty** | Similar to Uniqueness with the only diffrence, that the SMILES are not allowed to appear in the training data and therefore shows the models ability to generate new molecules. |
+| **Connected** | All training molecules have a single connected compound, meaning every atom can be reached from any other atom if you follow the graph structure through its edges. |
+| **Valency\[$e^{-2}$\]** | Valency is the capacity of an atom to bin and measured as the number of electrons it loses, gains or shares when bonding. |
+| **Atom\[$e^{-2}$\]** | Atom types that occured in the generated molecules. |
+| **Bond\[$e^{-2}$\]** | Bond types that occured in the generated molecules. |
+| **Angles\[$°$\]** | Angles between to bonds. |
+| **Bond Lengths\[$e^{-2}\text{Å}$\]** | Length of each occuring bond type. |
 
-For the distribution of generated molecules, they compare atom types, bond types, and valencies between generated samples and the test set. Smaller distances mean that the generated molecules look more like the data distribution.
+For general molecule generation properties, the paper reports standard metrics such as molecule stability, atom stability, validity, uniqueness, novelty, and connectedness. The reported results schow the proportion of generated molecules that satisfy the above mentioned crteria. The matricies valency, atom, and bond focus more on comparing the distribution of the training dataset with the distribution of the generated dataset using the Wasserstein Distance. This is a famous measure to define the similarity of two distributions. The results show the distance between the marginal disribution of the training and the generated dataset.
 
-Finally, MiDi is also evaluated as a 3D generator. The authors compare bond length and bond angle distributions between generated molecules and real molecules. This is important because a model could generate a valid graph but still place atoms in unrealistic 3D arrangements.
+Finally, MiDi is also evaluated as a 3D generator. The authors compare bond length and bond angle distributions between generated molecules and real molecules. This is important because a model could generate a valid graph but still place atoms in unrealistic 3D arrangements. Similar to the previous paragraph, these metricies are also compared with the Wasserstein distance.
 
 Results
-------
+======
 
 On the smaller QM9 dataset, most methods already perform quite well. This is not too surprising: QM9 molecules are small ($), and their bonds can often be recovered from atom distances without much ambiguity. Even here, MiDi improves over the base EDM model on graph-based metrics. With the adaptive noise schedule, MiDi reaches 97.5% molecular stability and 97.9% validity, while EDM reaches 90.7% molecular stability and 91.7% validity. OpenBabel remains very strong on this dataset, because the molecules are simple enough for a rule-based bond-reconstruction step to work reliably.
 
