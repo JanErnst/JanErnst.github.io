@@ -105,7 +105,7 @@ Atom type $\mathbf{X}$, bond type $\mathbf{Y}$ and formal charge $\mathbf{C}$ ge
 The parameter α defines how much of the input remains in a single noise step and is changed during training according to the newly introduced adaptive noise schedule. Even though MiDi must balance all features of the graph to generate a stable molecule, atom coordinates and bond types have less flexibility in this regard and cannot be derived from atom type and formal charge. This is why during the noise application α for coordinates and bond type decreases slower than for atom type and formal charge.
 
 Adaptive cosine noise schedule
-![Adaptive cosine noise schedule](/images/adaptive_cosine_schedule.pdf)
+![Adaptive cosine noise schedule](/images/adaptive_cosine_schedule-1.png)
 
 
 In the next chapter we will discuss what this means for the inference step, after exploring the architecture of the denoising model.
@@ -219,7 +219,6 @@ $$
 $$
 
 
-
 Experiments:
 ======
 
@@ -230,9 +229,11 @@ This setting is useful because it isolates the core ability of the model. A good
 Experimental setup
 ------
 
-The authors compare MiDi against the Equivariant Diffusion Model (EDM) followed by a separate bond prediction step. EDM is also a equivariant diffusion model for 3D molecule generation. Since EDM only generates atom types and coordinates, bonds must be added afterwards. The paper considers two variants: EDM with a simple distance-based lookup table, and EDM followed by OpenBabel, which tries to optimize bond orders to make the molecule chemically valid. 
+The authors compare MiDi against the Equivariant Diffusion Model (EDM) followed by a separate bond prediction step. EDM is also a equivariant diffusion model for 3D molecule generation. Since EDM only generates atom types and 3D coordinates, bonds must be added afterwards. The paper considers two variants: EDM with a simple distance-based lookup table, and EDM followed by OpenBabel, which tries to optimize bond orders to make the molecule chemically valid.
 
-The experiments are performed with explicit hydrogen atoms, which makes the task harder because the model has to place and connect all atoms, not only the heavy atoms. The authors evaluate on two datasets, depicted in table ... :
+The experiments are performed with explicit hydrogen atoms, which makes the task harder because the model has to place and connect all atoms, not only the heavy atoms. The authors evaluate on two datasets, depicted in the following table:
+
+
 
 QM9 has a lot less samples and contains small molecules with up to 9 heavy atoms. The GEOM-DRUGS data set on the other side is much more challenging and closer to realistic drug discovery. It contains around 430,000 drug-sized molecules, with an average of 44 atoms and up to 181 atoms. The evaluation combines graph-based and geometry-based metrics. 
 
