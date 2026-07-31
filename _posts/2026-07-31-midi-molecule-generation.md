@@ -11,23 +11,24 @@ tags:
 
 Introduction to MiDi
 ======
-When designing a new drug, scientists often have to generate a new molecule that is not only stable but also satisfies every condition necessary for the desired effect. Since the explosive rise of generative models, it is no wonder that these topics have been combined in research. The authors Vignac, Osman, Toni & Frossard wanted to tackle this task too, and presented their model MiDi in the paper *MiDi: **Mi**xed Graph and 3D Denoising **Di**ffusion for Molecule Generation*. In this blog post, I want to recap the architecture, novelties, and results of MiDi.
+When designing a new drug, scientists often have to generate a new molecule that is not only stable but also satisfies every condition necessary for the desired effect. Since the explosive rise of generative models, it is no wonder that these topics have been combined in research. The authors Vignac, Osman, Toni & Frossard wanted to tackle this task too, and presented their model MiDi in the paper *MiDi: **Mi**xed Graph and 3D Denoising **Di**ffusion for Molecule Generation* (2023). In this blog post, I want to recap the architecture, novelties, and results of MiDi so even without deep AI knwoledge you can understand what makes it special.
 
-In this blog post, we will build up the motivation behind MiDi, explain why molecule generation needs both graph and 3D information, and look at how the model combines discrete diffusion for chemical structure with Gaussian diffusion for spatial coordinates. Finally, we will discuss why this joint approach leads to much more stable molecules on challenging drug-like datasets.
+We will build up the motivation behind MiDi, explain why molecule generation needs both graph and 3D information, and look at how the model combines discrete diffusion for chemical prpoerties with Gaussian diffusion for spatial coordinates. Finally, we will discuss why this joint approach leads to much more stable molecules on challenging drug-like datasets compared to similar models.
 
-To do so, we will first discuss why it even makes sense to use neural networks for molecule generation, and cover the most important basics needed to understand how MiDi works and what is important when creating a molecule. Afterwards, we take a deeper look into MiDi's architecture and novel features, then compare it with the state-of-the-art models of the time that tackle the same problem.
+To do so, we will first discuss why it even makes sense to use neural networks for molecule generation, and cover the most important basics needed to understand how MiDi works and what is important when creating a molecule. 
 
 Why even consider deep learning?
 ======
 
-When we think about generating molecules, we can reformulate it as a search problem with a new dimension for each feature of a molecule. The features that interest us here are the number of atoms, type of atoms, type of bond between atoms, and three-dimensional structure. When we consider an average-sized drug of $40$ atoms, we can already see how this results in an enormous search space of different combinations. Even if only a small number of all elements are actually used in drug synthesis, the possible structures in 3D space are near limitless. This search space would increase even further if we included special atom groups, but we will not discuss that further. So at this point we can clearly say that randomly selecting a possible molecule will most likely not result in a viable new drug.
+When we think about generating molecules, we can reformulate it as a search problem with a new dimension for each feature of a molecule. The features that interest us here are the number of atoms, type of atoms, type of bond between all atoms, and three-dimensional structure. When we consider an average-sized drug of $\approx40$ atoms, we can already see how this results in an enormous search space of different combinations. Even though only a small number of all elements are actually used in drug synthesis, the possible structures in 3D space are near limitless. This search space would increase even further if we included special atom groups, but we will not discuss that further today. So at this point we can clearly say that randomly selecting a possible molecule will most likely not result in a viable new drug.
 
-From all the chemical knowledge we have, we already know that not all combinations are possible and can therefore reduce the space by applying rules and constraints that apply to stable molecules. This opens the possibility of creating heuristic rule sets or algorithms to generate a molecule, right? Yes, but that really only works for small molecules. The larger a molecule gets, the more complex its configuration becomes, resulting in increasingly difficult prediction of its attributes and properties. Every new change can destabilize the molecule, and there is no single fixed order to follow when creating one.
+From all the chemical knowledge we have, we already know that not all combinations are possible and can therefore reduce the space by applying rules and constraints that apply to stable molecules. This opens the possibility of creating heuristic rule sets or algorithms to generate a molecule, right? Yes, but that really only works for small molecules. The larger a molecule gets, the more complex its configuration becomes, resulting in increasingly difficult prediction of its attributes and properties. Every new change can destabilize the molecule, and there is no single fixed order to follow when creating one. 
 
+To summarize, we have a huge search space combined with complex relations between the features. I do not know about me but this already sounds like a solution where we shoudl defenitly apply deep learning, and this is what we will explore with MiDi.
 
 What is special about MiDi?
 ======
-Before I can answer this question, I have to tell you something important about molecules. Molecules are often depicted as two-dimensional graphs, like in Figure 1. These representations define the chemical properties, bond and atom types, and functional groups that are essential for drugs. They are also important because scientists can derive the synthetic path from this graph. But this is not enough: given a fixed 2D graph, we can create multiple fitting 3D arrangements, called conformers. The three-dimensional structure defines how the molecule interacts with other molecules, controls its biological activity, and determines its binding affinity to proteins.
+Before I can answer this question, I have to tell you something important about molecules. Molecules are often depicted as two-dimensional graphs. These representations define the chemical properties, bond and atom types, and functional groups that are essential for drugs. They are also important because scientists can derive the synthetic path from these graphs. But this is not enough: given a fixed 2D graph, we can create multiple fitting 3D arrangements, called conformers. The conformer defines how the molecule interacts with other molecules, controls its biological activity, and determines its binding affinity to proteins. The following figure 1 shows you an example for two-demensional graph and a fitting three-dimensional conformer.
 
 <figure>
   <img src="/images/mixed_graph.jpg" alt="mixed graph" style="display:block; margin:auto; width:80%"/>
@@ -35,29 +36,29 @@ Before I can answer this question, I have to tell you something important about 
   </figcaption>
 </figure>
 
-Generating only the 2D graph is a research field that has already been explored thoroughly, and it is possible to generate a conformer using an additional generator or algorithm. Even though 3D-structure molecule generators are not as well researched and provide no information on bond types, the reverse process is also possible. One example of a 3D-only generator is the Equivariant Diffusion Model (EDM). When combining it with the chemical software OpenBabel, which predicts the resulting 2D graph, we get both representations — just not in a single step, but across multiple steps. This is often undesirable as it introduces more room for errors across the chain of steps and is less practical.
+Generating only the 2D graph is a research field that has already been explored thoroughly, and it is possible to generate a conformer using an additional generator or algorithm. Even though 3D-structure molecule generators are not as well researched and provide no information on bond types, the reverse process is also possible. One example of a 3D-only generator is the Equivariant Diffusion Model (EDM). When combining it with the chemical software OpenBabel, which predicts the resulting 2D graph, we get both representations — just not in a single step, but across multiple steps. This is often undesirable as it introduces more room for errors across the chain of steps and is less practical. However, before MiDi EMD+OpenBabel could be considered state-of-the-art when it comes to molecule generation.
 
-This is the point where MiDi enters the stage. Unlike before, MiDi is the first model able to generate both the 2D and 3D structure of a molecule given only the number of atoms. It is therefore the first end-to-end differentiable model in this field and can optimize the entire task jointly. This allows the model to learn all properties of a molecule while balancing the different effects of the 2D and 3D representations.
+This is the point where MiDi enters the stage. Unlike before, MiDi is the first model able to generate both the 2D and 3D structure of a molecule given only the number of atoms. It is therefore the first end-to-end differentiable model in its field and can optimize the entire task jointly. This allows the model to learn all properties of a molecule while balancing the different effects of the 2D and 3D representations.
 
 <figure>
   <img src="/images/selected_samples1.png" alt="selected_samples1" style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 1: Example output from MiDi.</figcaption>
+  <figcaption style="text-align:center">Figure 2: Example output from MiDi.</figcaption>
 </figure>
 
-In the figure above, I give you a first glimpse at the generated molecules from MiDi, so you can imagine the 2D and 3D structures we are talking about in this post. As a side note: this is where the *Mixed* (Mi) in the name comes from.
+In the figure above, I give you a first glimpse at the generated molecules from MiDi, so you can imagine the 2D and 3D structures we are talking about in this post. As a side note: this is where the *Mixed* (Mi) part in the name comes from.
 
 
 We have to talk about some basics now.
 ======
 
-To fully understand the process and architecture, we will now cover the background knowledge needed to understand the function, architecture, and novelties of MiDi.
+To fully understand the process and architecture, we will now cover the background knowledge needed to understand the function, architecture, and novelties of MiDi together.
 
 Molecules as graphs
 ------
 
 Previous works on molecule generation have already demonstrated the efficiency of graph structures. MiDi is no different in this regard and also represents its molecules as a graph. A graph generally consists of nodes and edges connecting them. Nodes represent the atoms of a molecule, the edges are the bonds between them, and both are described by their features. In the case of MiDi, each molecule built from $n$ atoms is represented as the graph $G = (\mathbf{X},\mathbf{C},\mathbf{R},\mathbf{Y})$ with $\mathbf{X}$ as the atom type and $\mathbf{C}$ as their formal charge, which are both one-hot encoded vectors of length $n$. $\mathbf{R}\in\mathbb{R}^{3 \times n}$ are the three-dimensional coordinates of all $n$ atoms and $\mathbf{Y}$ are the bond types between them, saved as an $n \times n$ matrix. Notably, having no bond is also considered to be a bond type. Looking at Figure ..., it becomes obvious why this representation fits a molecule well and intuitively.
 
-Equivariance
+E(3)-Equivariance
 ------
 When generating any structure in 3D space, we must always respect its dynamic nature. Molecules do not have a general order or fixed sequence and can undergo translation and rotation in space. This does not affect their functionality, type, or features — except the coordinates of each atom when referenced to the same origin point. A molecule generator should therefore be able to generate the same molecule regardless of how the input is positioned in space. This is where the concept of equivariance comes into play. Equivariance holds when any transformation of the input results in the same transformation of the output. So when we rotate the input graph $G_1$ from Figure ..., the corresponding outputs rotate equally. This also eliminates the need for randomly augmented training data, as all those samples become redundant.
 
