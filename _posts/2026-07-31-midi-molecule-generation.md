@@ -158,6 +158,7 @@ The denoising model is the main component of MiDi that is trained to generate cl
 First, we will look at the architecture from figure 6. At its core, the denoising model of MiDi is a multi-layer transformer graph neural network enclosed by multilayer perceptron (MLP). To understand what happens there, we will follow a sample through the network and discuss all parts of the denoising model, from input over hidden layers to loss.
 
 The denoising model takes a noisy graph of $n$ atoms with noisy features and graph-level features $\omega$ sampled from the distributions of the training data as input. The graph-level features $\omega$ are not part of the output but help the network retain and process global information throughout the generation process. 
+The folowing section will contain a lot of math. To understand what MiDi does you do not have to understand each equation, but I included them anyway for the math enthusiats or jsut for a deeper understanind of what happens.
 
 Architecture
 ------
@@ -169,7 +170,7 @@ MiDi has a transformer architecture that is built up from successive self-attent
   <figcaption style="text-align:center">Figure 6: Architecture of MiDi.</figcaption>
 </figure>
 
-Having already discussed the inputs, let us focus first on the separated, parallel MLPs for each feature. At first glance these appear to be standard MLPs, which they are — except for the MLP of the 3D coordinates. For molecule generation it is important to maintain E(3) equivariance, and therefore this MLP was adapted to satisfy that condition. To preserve E(3) equivariance, MiDi replaces the ordinary coordinate-wise MLP with a geometric PosMLP: 
+Having already discussed the inputs, let us focus first on the separated, parallel MLPs for each feature. At first glance these appear to be standard MLPs, which they are — except for the MLP of the 3D coordinates. For molecule generation it is important to maintain E(3) equivariance, and therefore this MLP was adapted to satisfy that condition. To preserve E(3) equivariance, MiDi replaces the ordinary coordinate-wise MLP with a geometric PosMLP:
 
 $$
 \operatorname{PosMLP}(R)
@@ -182,10 +183,9 @@ $$
 \in \mathbb{R}^{n\times 3}
 $$
 
-it applies an MLP only to each atom’s rotation-invariant distance from the origin $\right\|$, then uses the result to rescale the atom’s direction vector and re-centers all coordinates to keep the molecular center of mass at zero.
+it applies an MLP only to each atom’s rotation-invariant distance from the origin $\|\mathbf{R}\| \in \mathbb{R}°{n\times 1}$, then uses the result to rescale the atom’s direction vector and re-centers all coordinates to keep the molecular center of mass at zero.
 
-
-After the first MLP we enter the core of the network. We can see multiple E(3)+ Graph Transformer layers that are all built the same way. Each begins with the so-called Update Block, which updates all features in sequence, starting with extracting the 3D information from the coordinates. This is done with the novel Relaxed Equivariant Graph Neural Networks (rEGNNs), which are based on Equivariant Graph Neural Networks (EGNNs). EGNNs are effective and efficient layers for processing 3D coordinates while maintaining E(3) equivariance. These layers recursively update each coordinate of the graph using only rotation-invariant arguments from the node and edge features.
+After the first MLP we enter the core of the network. We can see multiple E(3)+Graph Transformer layers that are all built the same way. Each begins with the so-called Update Block, which updates all features in sequence, starting with extracting the 3D information from the coordinates. This is done with the novel Relaxed Equivariant Graph Neural Networks (rEGNNs), which are based on Equivariant Graph Neural Networks (EGNNs). EGNNs are effective and efficient layers for processing 3D coordinates while maintaining E(3) equivariance. These layers recursively update each coordinate of the graph using only rotation-invariant arguments from the node and edge features.
 
 $$
 [\Delta r]_{ij}
@@ -199,7 +199,7 @@ $$
 \right).
 $$
 
-In the case of MiDi, we can exploit the fact that our inputs are all centered around their center of mass (CoM) after the noise process. Therefore, the original formulation was *relaxed* to ignore translation and only use rotation-invariant descriptors (e.g., $\cos(r_i,r_j)$ or $\|r_j\|_2$). The new 3D information $\|r_i-r_j\|_2,\, \|r_i\|_2, \|r_j\|_2$ are all calculated relative to the center of mass $0$ and are rotation-invariant. Combined with the term $\left(r_i-r_j\right)$, they guarantee rotation equivariance.
+In the case of MiDi, we can exploit the fact that our inputs are all centered around their center of mass (CoM) after the noise process. Therefore, the original formulation was *relaxed* to ignore translation and only use rotation-invariant descriptors (e.g., $\cos(r_i,r_j)$ or $\|r_j\|_2$). The new 3D information $\|r_i-r_j\|_2,\, \|r_i\|_2, \|r_j\|_2$ are all calculated relative to the zero center of mass and are rotation-invariant. Combined with the term $(r_i-r_j)$, they guarantee rotation equivariance.
 
 $$
 \begin{aligned}
@@ -259,32 +259,51 @@ w,\,
 \end{aligned}
 $$
 
-The complete update process extracts the 3D information from the current graph and then uses $\Delta_r$, node, and global features to update the edge embeddings. Using transformer attention, MiDi updates the node embeddings with the previously calculated attention coefficients. The flattened attention heads are then used to calculate the rGNN update and the final graph embedding. To do this, MiDi uses PNA layers that use pooling to aggregate the embeddings.
+The complete update process extracts the 3D information from the current graph and then uses $\Delta_r$, node, and global features to update the edge embeddings. Using transformer attention, MiDi updates the node embeddings with the previously calculated attention coefficients. The flattened attention heads are then used to calculate the rEGNN update and the final graph embedding. To do this, MiDi uses PNA layers that use pooling to aggregate the embeddings.
 
-After the updates are complete, MiDi applies dropout for better generalization and then normalizes all features except the graph features. Similarly to the first MLP layer, the normalization layer for the 3D coordinates is again modified to maintain E(3) equivariance.
-
-Finally, after repeating this process multiple times, MiDi applies a final MLP layer and returns its output values. 3D coordinates are returned as pointwise estimates, while the atom type, formal charge, and bond type are predicted as distributions over all classes. The corresponding loss is therefore a combination of regression loss for coordinates and cross-entropy loss for all others.
+After the updates are complete, MiDi applies dropout for better generalization and then normalizes all features except the graph features. Similarly to the first MLP layer, the normalization layer for the 3D coordinates is again modified to maintain E(3) equivariance:
 
 $$
-\mathcal{L}(G,\hat{p}^{G}) =
+\operatorname{E3Norm}(R)
+=
+\gamma\,
+\frac{\lVert R\rVert}{\bar{n}+\delta}
+\frac{R}{\lVert R\rVert}
+=
+\gamma\,
+\frac{R}{\bar{n}+\delta},
+\qquad
+\bar{n}
+=
+\sqrt{\frac{1}{n}\sum_{i=1}^{n}\lVert r_i\rVert_2^2}
+$$
+Finally, after repeating this process multiple times, MiDi applies a final MLP layer and returns its output values. 3D coordinates are returned as pointwise estimates, while the atom type, formal charge, and bond type are predicted as distributions over all classes. The corresponding loss during training is therefore a combination of regression loss for coordinates and cross-entropy (CE) loss for all others.
+
+$$
+\begin{aligned}
+\mathcal{L}(G,\hat{p}^{G}) ={}&
 \lambda_r \left\|\hat{R}-R\right\|^2
-+ \lambda_x\,\mathrm{CE}\!\left(X,p_{\theta}^{X}\right)
-+ \lambda_c\,\mathrm{CE}\!\left(C,p_{\theta}^{C}\right)
-+ \lambda_y\,\mathrm{CE}\!\left(Y,p_{\theta}^{Y}\right)
+&& \text{(Coordinate regression loss)} \\
+&+ \lambda_x\,\mathrm{CE}\!\left(X,p_{\theta}^{X}\right)
+&& \text{(CE atom type loss)} \\
+&+ \lambda_c\,\mathrm{CE}\!\left(C,p_{\theta}^{C}\right)
+&& \text{(CE formal charge loss)} \\
+&+ \lambda_y\,\mathrm{CE}\!\left(Y,p_{\theta}^{Y}\right)
+&& \text{(CE bond type loss)}
+\end{aligned}
 $$
 
+That was a lot of math... But we did it and all you have to remember is that MiDi is a E(3)+Graph Transformer that takes a noisy graph as input, attends each feature to each other multiple times while maintaining equivariance through targeted modifications to finally return a clean and stable graph after repeatatly propagating a combinational loss back through the network.
 
 How was MiDi tested?
 ======
 
-After introducing the model, the most important question is whether generating the molecular graph and the 3D conformation together actually helps. MiDi is evaluated on unconditional molecule generation: the model is not asked to optimize a specific property or binding pocket, but simply to sample realistic molecules from the learned distribution.
-
-This setting is useful because it isolates the core ability of the model. A good molecule generator should not only place atoms in plausible 3D positions, but also assign chemically meaningful bonds, atom types, and formal charges. In previous 3D diffusion models, the graph is usually reconstructed after generation — for example by looking at interatomic distances or by using chemistry software such as OpenBabel. MiDi instead predicts the graph and the conformation during the same denoising process.
+After introducing the model itself, the most important question for us should be whether generating the molecular graph and the 3D conformation together actually helps. To find that out, MiDi willnow be asked generate realistic molecules from the learned distribution after beeing trained on two different datasets. This setting is useful to evaluate the core ability of the model. A good molecule generator should not only place atoms in plausible 3D positions, but also assign chemically meaningful bonds, atom types, and formal charges.
 
 Experimental setup
 ------
 
-The authors compare MiDi against the Equivariant Diffusion Model (EDM) followed by a separate bond prediction step. EDM is also an equivariant diffusion model for 3D molecule generation. Since EDM only generates atom types and 3D coordinates, bonds must be added afterwards. The paper considers two variants: EDM with a simple distance-based lookup table, and EDM followed by OpenBabel, which tries to optimize bond orders to make the molecule chemically valid.
+MiDi will compete against EDM followed by a separate bond prediction step. The paper considers two variants: EDM with a simple distance-based lookup table, and EDM followed by OpenBabel, which tries to optimize bond orders to make the molecule chemically valid.
 
 The experiments are performed with explicit hydrogen atoms, which makes the task harder because the model has to place and connect all atoms, not only the heavy atoms. The authors evaluate on two datasets, depicted in the following table:
 
@@ -294,7 +313,7 @@ The experiments are performed with explicit hydrogen atoms, which makes the task
 | **Number of molecules** | **133,000** molecules | **430,000** molecules |
 | **Molecule size** | Up to **9 heavy atoms** per molecule | Average of **44 atoms**, with up to **181 atoms** |
 
-QM9 has far fewer samples and contains small molecules with up to 9 heavy atoms, which are all atoms except hydrogen. The evaluation for MiDi was done with full molecules, including the additional hydrogen atoms. The GEOM-DRUGS dataset, on the other hand, is much more challenging and closer to realistic drug molecules. It contains around 430,000 drug-sized molecules, with an average of 44 atoms and up to 181 atoms. The evaluation combines metrics for molecule structure and the general distribution of generated molecules compared to the training data. The following table explains in more detail what each metric means, first the six molecule metrics and then the five distribution metrics.
+QM9 has far fewer samples and contains small molecules with up to 9 heavy atoms, which are all atoms except hydrogen atoms. The evaluation for MiDi was done with full molecules, including the additional hydrogen atoms. The GEOM-DRUGS dataset, on the other hand, is much more challenging and closer to realistic drug molecules. It contains 430,000 drug-sized molecules, with an average of 44 atoms and up to 181 atoms. The evaluation combines metrics for molecule structure and the general distribution of generated molecules compared to the training data. The following table explains in more detail what each metric means, first the six molecule metrics and then the five distribution metrics.
 
 | Metric | Description |
 |---|---|
@@ -323,14 +342,14 @@ So far not a huge improvement
 
 <figure>
   <img src="/images/qm9_molecule.png" alt="Table of molecule generation metrics on QM9 comparing EDM, EDM with OpenBabel, and MiDi with adaptive noise schedule across stability, validity, uniqueness, novelty, and connectedness." style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 6: Molecule generation metrics on QM9. MiDi with the adaptive noise schedule improves over the base EDM model on stability, validity, and connectedness. OpenBabel-assisted EDM remains a strong competitor on this simpler dataset, where bond types can often be inferred from atom distances alone.</figcaption>
+  <figcaption style="text-align:center">Figure 7: Molecule generation metrics on QM9. MiDi with the adaptive noise schedule improves over the base EDM model on stability, validity, and connectedness. OpenBabel-assisted EDM remains a strong competitor on this simpler dataset, where bond types can often be inferred from atom distances alone.</figcaption>
 </figure>
 
 On the smaller QM9 dataset, the comparison EDM networks already perform quite well, both with and without their assistive software. This is not too surprising: QM9 molecules are small and their bonds can often be recovered from atom distances without much ambiguity. Still, MiDi improves over the base EDM model on molecule stability, atom stability, validity, and connectedness, though only by a small margin. With the adaptive noise schedule, MiDi reaches $97.5\%$ molecular stability and $97.9\%$ validity, while EDM reaches $90.7\%$ molecular stability and $91.7\%$ validity. OpenBabel further improves EDM's performance, which leads to an even smaller margin.
 
 <figure>
   <img src="/images/distribution_qm9.png" alt="Bar chart comparing the Wasserstein distances for valency, atom type, bond type, bond angle, and bond length distributions on QM9 between EDM, EDM with OpenBabel, and MiDi." style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 7: Wasserstein distances of the marginal distributions on QM9 (lower is better). MiDi improves on valency, atom, and bond type distributions, while EDM still produces slightly more realistic bond angles and lengths for these small molecules.</figcaption>
+  <figcaption style="text-align:center">Figure 8: Wasserstein distances of the marginal distributions on QM9 (lower is better). MiDi improves on valency, atom, and bond type distributions, while EDM still produces slightly more realistic bond angles and lengths for these small molecules.</figcaption>
 </figure>
 
 Looking at the Wasserstein distances of the marginal distributions, we can see a similar pattern — remember that we want a small distance between the distributions. Valency, atom, and bond diversity have already improved when using MiDi, but this changes when we look at the bond angles and lengths. Apparently, when generating small molecules, EDM generates more realistic 3D information, which is not surprising as EDM's main task is to generate coordinates and not the complete 2D and 3D structure of a molecule. If we stopped here, we could already say that MiDi is able to compete with state-of-the-art models, even if it does not always surpass them — especially when they are combined with additional software. But this is already a significant finding, because MiDi is able to generate both 2D and 3D stable structures while being end-to-end differentiable.
@@ -341,14 +360,14 @@ Now that we have seen the results on the small dataset, I am sure you are as exc
 
 <figure>
   <img src="/images/geom_molecule.png" alt="Table of molecule generation metrics on GEOM-DRUGS comparing EDM, EDM with OpenBabel, and MiDi with adaptive noise schedule, showing a dramatic improvement in molecular stability for MiDi." style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 8: Molecule generation metrics on GEOM-DRUGS. The advantage of MiDi's joint generation becomes clear here: while EDM alone achieves only $5.5\%$ molecular stability, MiDi reaches $91.6\%$ — showing that generating graph and 3D structure together is essential for drug-like molecules.</figcaption>
+  <figcaption style="text-align:center">Figure 9: Molecule generation metrics on GEOM-DRUGS. The advantage of MiDi's joint generation becomes clear here: while EDM alone achieves only $5.5\%$ molecular stability, MiDi reaches $91.6\%$ — showing that generating graph and 3D structure together is essential for drug-like molecules.</figcaption>
 </figure>
 
 This dataset contains larger, drug-like molecules with many more atoms and more complex structures. Here, the limitations of the two-step approach become obvious. EDM can generate reasonable-looking 3D point clouds, but when bonds are inferred afterwards, only $5.5\%$ of the resulting molecules are molecularly stable. Adding OpenBabel helps, increasing molecular stability to $40.3\%$, but this still leaves most generated molecules chemically problematic. MiDi performs much better on this harder benchmark. The adaptive version generates $91.6\%$ molecularly stable molecules, while also keeping atom stability close to the data distribution at $99.8\%$. This is the main result of the paper: jointly denoising the graph and the coordinates allows the model to learn chemistry and geometry as a coupled object, rather than treating bond prediction as an afterthought. In the end, MiDi is able to outperform EDM with and without OpenBabel on every molecule metric except Validity, where MiDi only reaches $77.8\%$.
 
 <figure>
   <img src="/images/distribution_qm9.png" alt="Bar chart comparing the Wasserstein distances for valency, atom type, bond type, bond angle, and bond length distributions on GEOM-DRUGS between EDM, EDM with OpenBabel, and MiDi." style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 9: Wasserstein distances of the marginal distributions on GEOM-DRUGS (lower is better). MiDi produces substantially more realistic bond angles and valency distributions than both EDM variants, confirming that jointly learning graph structure and 3D geometry leads to chemically more consistent molecules.</figcaption>
+  <figcaption style="text-align:center">Figure 10: Wasserstein distances of the marginal distributions on GEOM-DRUGS (lower is better). MiDi produces substantially more realistic bond angles and valency distributions than both EDM variants, confirming that jointly learning graph structure and 3D geometry leads to chemically more consistent molecules.</figcaption>
 </figure>
 
 The 3D metrics show the same trend. On GEOM-DRUGS, MiDi produces much more realistic bond angles than EDM or EDM followed by OpenBabel. The bond-angle Wasserstein distance drops from around $6°$ for the baselines to $1.07°$ for adaptive MiDi. The valency distribution is also much closer to the test set, which means the generated atoms satisfy atom bonding rules more consistently.
