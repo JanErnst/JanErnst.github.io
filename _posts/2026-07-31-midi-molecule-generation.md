@@ -56,11 +56,11 @@ To fully understand the process and architecture, we will now cover the backgrou
 Molecules as graphs
 ------
 
-Previous works on molecule generation have already demonstrated the efficiency of graph structures. MiDi is no different in this regard and also represents its molecules as a graph. A graph generally consists of nodes and edges connecting them. Nodes represent the atoms of a molecule, the edges are the bonds between them, and both are described by their features. In the case of MiDi, each molecule built from $n$ atoms is represented as the graph $G = (\mathbf{X},\mathbf{C},\mathbf{R},\mathbf{Y})$ with $\mathbf{X}$ as the atom type and $\mathbf{C}$ as their formal charge, which are both one-hot encoded vectors of length $n$. $\mathbf{R}\in\mathbb{R}^{3 \times n}$ are the three-dimensional coordinates of all $n$ atoms and $\mathbf{Y}$ are the bond types between them, saved as an $n \times n$ matrix. Notably, having no bond is also considered to be a bond type. Looking at Figure 1 again, it becomes obvious why this representation fits a molecule well and intuitively.
+Previous works on molecule generation have already demonstrated the efficiency of graph structures. MiDi is no different in this regard and also represents its molecules as a graph. A graph generally consists of nodes and edges connecting them. Nodes represent the atoms of a molecule, the edges are the bonds between them, and both are described by their features. In the case of MiDi, each molecule built from $n$ atoms is represented as the graph $G = (\mathbf{X},\mathbf{C},\mathbf{R},\mathbf{Y})$ with $\mathbf{X}$ as the atom type and $\mathbf{C}$ as their formal charge, which are both one-hot encoded vectors of length $n$. $\mathbf{R}\in\mathbb{R}^{3 \times n}$ are the three-dimensional coordinates of all $n$ atoms and $\mathbf{Y}$ are the bond types between them, saved as an $n \times n$ matrix. Notably, having no bond is also considered to be a bond type. Atom type, formal charge and coordinates relate to an atom and are therefore node features, while the bond type is a edge feature, connecting two nodes. Looking at Figure 1 again, it becomes obvious why this representation fits a molecule well and intuitively.
 
 E(3)-Equivariance
 ------
-When generating any structure in 3D space, we must always respect its dynamic nature. Molecules do not have a general order or fixed sequence and can undergo translation and rotation in space. This does not affect their functionality, type, or features — except the coordinates of each atom when referenced to the same origin point. A molecule generator should therefore be able to generate the same molecule regardless of how the input is positioned in space. This is where the concept of equivariance comes into play. Equivariance holds when any transformation of the input results in the same transformation of the output. So when we rotate the first input graph from Figure 3, the corresponding outputs rotate equally. This also eliminates the need for randomly augmented training data, as all only rotated samples become redundant. For MiDi we do consider E(3)-equivariance, which is equivariance in three-dimenonal space.
+When generating any structure in space, we must respect its dynamic nature. Molecules do not have a general order or fixed sequence and can undergo translation and rotation in 3D space. This does not affect their functionality, type, or features — except the coordinates of each atom when referenced to the same origin point. A molecule generator should therefore be able to generate the same molecule regardless of how the input is positioned in space. This is where the concept of equivariance comes into play. Equivariance holds when any transformation of the input results in the same transformation of the output. So when we rotate the first input graph from Figure 3, the corresponding outputs rotate equally. This also eliminates the need for randomly augmented training data, as all only rotated samples become redundant. For MiDi we do consider E(3)-equivariance, which is equivariance in three-dimenonal space.
 
 <figure>
   <img src="/images/equivariance.jpg" alt="Diagram showing that rotating the input graph by a transformation S_g and then passing it through the network gives the same result as first passing the original input through the network and then rotating the output by the same transformation." style="display:block; margin:auto; width:80%"/>
@@ -71,12 +71,14 @@ When generating any structure in 3D space, we must always respect its dynamic na
 Transformers
 ------
 
-Transformers are a class of neural networks that process sets of elements by letting every element attend to every other element simultaneously. The core mechanism is **self-attention**: given a set of input vectors, each one is projected into a query $q$, a key $k$, and a value $v$. The attention weight between element $i$ and element $j$ is computed as $\alpha_{ij} = \text{softmax}(q_i^\top k_j / \sqrt{d})$, and the new representation of element $i$ is the weighted sum $\sum_j \alpha_{ij} v_j$. Intuitively, this allows the network to decide how much each element should "look at" every other element when updating its own representation. Because self-attention has no notion of order, positional or structural information (such as edges in a graph) must be injected explicitly. Transformers are stacked in multiple layers, each followed by a normalization step and a feedforward network, enabling the model to build increasingly abstract representations of the input. In MiDi, this mechanism is applied over the atoms of a molecule: each atom can attend to all other atoms and their bonds, allowing the network to capture long-range chemical dependencies regardless of graph distance.
+Transformers are already well established in the world of neural networks. MiDi is no diffrence to most other modern models and benefits from the stable processing over multiple layers. Most people in the world of AI have probably already heard of them and are at least somewhat familiar with them. Nonetheless, we will do a short sidetrack on what a transformer is and does.
+
+Transformers are a class of neural networks that process sets of elements by letting every element attend to every other element simultaneously. At its core lies the self-attention mechanism: given a set of input vectors (presenting a part of the input, also called token), each one is projected into a query $q$, a key $k$, and a value $v$. The attention weight between element $i$ and element $j$ is computed as $\alpha_{ij} = \text{softmax}(q_i^\top k_j / \sqrt{d})$, and the new representation of element $i$ is the weighted sum $\sum_j \alpha_{ij} v_j$. Intuitively, this allows the network to decide how much each element should "attend to" every other element when updating its own representation. Because self-attention has no notion of order, positional or structural information (such as edges in a graph) must be injected explicitly. Transformers are stacked in multiple layers, each followed by a normalization step and a feedforward network, enabling the model to build increasingly abstract representations of the input. In MiDi, this mechanism is applied over the atoms of a molecule: each atom can attend to all other atoms and their bonds, allowing the network to capture long-range chemical dependencies.
 
 Diffusion:
 ------
 
-As the paper title states, MiDi is a denoising diffusion model, which is built from a noise model and a denoising model, where only the denoising model is used during inference. However, it is still crucial to understand the complete pipeline to see how MiDi works. 
+As the paper title states, MiDi is a denoising **di**ffusion model, which is the combination of a noise model and a denoising model. Only the denoising model is actually used during inference. However, it is still crucial to understand the complete pipeline to see how MiDi operates.
 
 Noise model:
 ------
@@ -90,20 +92,15 @@ q\!\left(G^{1},\ldots,G^{T}\mid G^{0}\right)
 q\!\left(G^{t}\mid G^{t-1}\right),
 $$
 
-This process results in a completely noised output, as shown in Figure ...
+With each step the original input gets more and more currupted until it is, at least for us mere humans, no longer understandable. Figure 4 visualises this process on a picture.
 
 <figure>
   <img src="/images/Diffusion.png" alt="A sequence of images showing a cat being progressively corrupted by Gaussian noise over T timesteps until the original image is completely unrecognizable." style="display:block; margin:auto; width:80%"/>
   <figcaption style="text-align:center">Figure 4: The forward noise process illustrated on an image. Starting from the clean input $G^0$ on the left, noise is added step by step until the original structure is completely destroyed at step $T$ on the right. The denoising model learns to reverse this process.</figcaption>
 </figure>
 
-As already explained in previous sections, MiDi generates a graph described by its edges and node features. The 3D coordinates are continuous values while the remaining features are discrete values. The corresponding noise is therefore either continuous Gaussian noise or discrete noise, resulting in the following combined noise at each step:
+The purpose of the noise model lies in creating a noisy graph so that the denoising model can learn to reverse the noise. Generally, the denoising model can either predict the noise and reverse it in the same style as the noise model or predict the clean output directly. MiDi does the first. As already explained in previous sections, MiDi generates a graph described by its edges and node features. The 3D coordinates are continuous values while the remaining features are discrete values. The corresponding noise is therefore either continuous Gaussian for coordinates noise or discrete noise for the remaining features, resulting in the following combined noise at each step on each training sample:
 
-| Quantity | Gaussian diffusion | Discrete diffusion |
-|---|---|---|
-| One-step forward transition | $$q(z_t\mid z_{t-1})=\mathcal{N}\!\left(z_t;\alpha_t z_{t-1},\sigma_t^2I\right)$$ | $$q(z_t\mid z_{t-1})=\mathcal{C}\!\left(z_t;z_{t-1}Q_t\right)$$ |
-| Direct transition from clean data | $$q(z_t\mid x)=\mathcal{N}\!\left(z_t;\bar{\alpha}_t x,\bar{\sigma}_t^2I\right)$$ | $$q(z_t\mid x)=\mathcal{C}\!\left(z_t;x\bar{Q}_t\right)$$ |
-| Reverse transition after marginalizing the clean prediction | $$\int p_\theta(z_{t-1}\mid x,z_t)\,dp_\theta(x\mid z_t)=\mathcal{N}\!\left(z_{t-1};\mu_t\hat{x}+\nu_tz_t,\tilde{\sigma}_t^2I\right)$$ | $$\sum_x p_\theta(x\mid z_t)\,q(z_{t-1}\mid z_t,x)\propto\sum_xp_\theta(x\mid z_t)\left(z_tQ_t^\top\odot x\bar{Q}_{t-1}\right)$$ |
 
 $$
 \begin{aligned}
@@ -115,6 +112,7 @@ R^{t};
 \alpha_{t}^{r}R^{t-1},
 (\sigma_{t}^{r})^{2}I
 \right)
+&& \text{(Gaussian noise on coordinates)}
 \\
 &\times
 \mathcal{C}
@@ -122,6 +120,7 @@ R^{t};
 X^{t};
 X^{t-1}Q_{x}^{t}
 \right)
+&& \text{(Discrete noise on atom types)}
 \\
 &\times
 \mathcal{C}
@@ -129,46 +128,62 @@ X^{t-1}Q_{x}^{t}
 C^{t};
 C^{t-1}Q_{c}^{t}
 \right)
+&& \text{(Discrete noise on formal charge)}
 \\
 &\times
 \mathcal{C}
 \!\left(
 Y^{t};
 Y^{t-1}Q_{y}^{t}
-\right).
+\right)
+&& \text{(Discrete noise on bond types)}.
 \end{aligned}
 $$
 
-Atom type $\mathbf{X}$, bond type $\mathbf{Y}$, and formal charge $\mathbf{C}$ receive discrete noise defined by the transition matrix $Q$, which has been derived from the marginal distribution of the training set for each feature. To ensure that the generated molecule stays centered in the subspace, the total amount of applied Gaussian noise must always sum to zero. This ensures that the input and output are roto-translation equivariant during training and inference.
+Atom type $\mathbf{X}$, bond type $\mathbf{Y}$, and formal charge $\mathbf{C}$ receive discrete noise defined by the transition matrix $Q^t$, which has been derived from the marginal distribution of the training set for each feature. To ensure that the generated molecule stays centered in the subspace, the total amount of applied Gaussian noise $\epsilon$ must always sum to zero $\sum_{i=1}^{n} \epsilon_i = 0$. This ensures that the input and output are roto-translation equivariant during training and inference.
 
-The parameter $\alpha$ defines how much of the input remains after a single noise step and is adjusted during training according to the newly introduced adaptive noise schedule. Even though MiDi must balance all features of the graph to generate a stable molecule, atom coordinates and bond types have less flexibility in this regard, as they cannot be derived from atom type and formal charge alone. This is why, during noise application, $\alpha$ for coordinates and bond type decreases more slowly than for atom type and formal charge.
+The parameter $\alpha$ defines how much of the input remains after a single noise step and is adjusted during training according to the newly introduced adaptive noise schedule in figure 5. Even though MiDi must balance all features of the graph to generate a stable molecule, atom coordinates and bond types have less flexibility in this regard, as they cannot be derived from atom type and formal charge alone. This is why, during noise application, $\alpha$ for coordinates and bond type decreases more slowly than for atom type and formal charge. If the denoising model then tries to reverse this problem, it will first generate a possible 3D structrue and bond types and then fit it with atom types and formal charges to stabelize everything.
 
 <figure>
   <img src="/images/adaptive_cosine_schedule-1.png" alt="Plot of the adaptive cosine noise schedule showing that alpha decreases more slowly for atom coordinates and bond types than for atom types and formal charges across the T diffusion timesteps." style="display:block; margin:auto; width:80%"/>
   <figcaption style="text-align:center">Figure 5: The adaptive cosine noise schedule. Atom coordinates and bond types (blue) retain more of their original signal for longer than atom types and formal charges (orange). This reflects the fact that coordinates and connectivity are harder to recover and should therefore be corrupted more gradually.</figcaption>
 </figure>
 
-In the next chapter, we will discuss what this means for the inference step, after exploring the architecture of the denoising model.
 
 Denoising model
 ------
 
-The denoising model is the main component of MiDi that is trained to generate mixed molecule graphs. In general, the second part of a diffusion model takes noisy data as input and returns a clean output. It achieves this by learning to reverse the noise that the noise model applied to the original training data, and then applying this reversal to the noisy input graph. To do so, MiDi combines three architectures and a mixed loss function, which we will now explore further.
+The denoising model is the main component of MiDi that is trained to generate clean mixed molecule graphs. In general, the second part of a diffusion model takes noisy data as input and returns a clean output. MiDi achieves this by learning to reverse the noise that the noise model applied to the original training data, and then applying this reversal to the noisy input graph. To do so, MiDi combines a transformer architectures with a mixed loss function, which we will now explore further.
 
-First, we will explore the architecture. At its core, the denoising model of MiDi is a multi-layer transformer graph neural network enclosed by MLPs.
+First, we will look at the architecture from figure 6. At its core, the denoising model of MiDi is a multi-layer transformer graph neural network enclosed by multilayer perceptron (MLP). To understand what happens there, we will follow a sample through the network and discuss all parts of the denoising model, from input over hidden layers to loss.
 
-To understand what happens here, we will follow a sample through the network and discuss all parts of the denoising model, from input and architecture to loss.
-
-The denoising model takes the noisy graph features and graph-level features as input. The graph-level features are not part of the output but help the network retain and process global information throughout the generation process.
+The denoising model takes a noisy graph of $n$ atoms with noisy features and graph-level features $\omega$ sampled from the distributions of the training data as input. The graph-level features $\omega$ are not part of the output but help the network retain and process global information throughout the generation process. 
 
 Architecture
 ------
 
-MiDi has a transformer architecture that is built up from successive self-attention modules, followed by normalization layers and feedforward networks. The complete transformer architecture is encapsulated within two MLPs, as shown in the following figure. We will now discuss each part in more detail to fully understand what happens here.
+MiDi has a transformer architecture that is built up from successive self-attention modules, followed by normalization layers and feedforward networks. The complete transformer architecture is encapsulated within two MLPs, as shown in the following figure 6. We will now discuss each part in more detail to fully understand what happens here.
 
-Having already discussed the inputs, let us focus first on the separated, parallel MLPs for each feature. At first glance these appear to be standard MLPs, which they are — except for the MLP of the 3D coordinates. For molecule generation it is important to maintain E(3) equivariance, and therefore this MLP was adapted to satisfy that condition.
+<figure>
+  <img src="/images/architecture.png" alt="Architecture of MiDI" style="display:block; margin:auto; width:80%"/>
+  <figcaption style="text-align:center">Figure 6: Architecture of MiDi.</figcaption>
+</figure>
 
-Here possibly the definition of what has happened with the MLP and normalization layers.
+Having already discussed the inputs, let us focus first on the separated, parallel MLPs for each feature. At first glance these appear to be standard MLPs, which they are — except for the MLP of the 3D coordinates. For molecule generation it is important to maintain E(3) equivariance, and therefore this MLP was adapted to satisfy that condition. To preserve E(3) equivariance, MiDi replaces the ordinary coordinate-wise MLP with a geometric PosMLP: 
+
+$$
+\operatorname{PosMLP}(R)
+=
+\Pi_{\mathrm{CoM}}
+\left(
+\operatorname{MLP}(\lVert R\rVert)
+\frac{R}{\lVert R\rVert+\delta}
+\right)
+\in \mathbb{R}^{n\times 3}
+$$
+
+it applies an MLP only to each atom’s rotation-invariant distance from the origin $\right\|$, then uses the result to rescale the atom’s direction vector and re-centers all coordinates to keep the molecular center of mass at zero.
+
 
 After the first MLP we enter the core of the network. We can see multiple E(3)+ Graph Transformer layers that are all built the same way. Each begins with the so-called Update Block, which updates all features in sequence, starting with extracting the 3D information from the coordinates. This is done with the novel Relaxed Equivariant Graph Neural Networks (rEGNNs), which are based on Equivariant Graph Neural Networks (EGNNs). EGNNs are effective and efficient layers for processing 3D coordinates while maintaining E(3) equivariance. These layers recursively update each coordinate of the graph using only rotation-invariant arguments from the node and edge features.
 
@@ -303,7 +318,7 @@ Does MiDi work?
 ======
 In short: yes — but how well exactly? Now that we know how MiDi works and have established a basis for evaluation, let's first look at the smaller, simpler dataset. The following table gives a good picture for comparing the different results. Remember that EDM only generates 3D structures with atoms, but no bond types. We will focus on the EDM model without additional software, EDM assisted by OpenBabel to generate fitting bonds, and the MiDi model with the adaptive noise schedule. These results always show the comparison between the test set and the generated set. The data section of the results compares the test set with the training set to show the generalization ability of MiDi.
 
-So far not a real improvement
+So far not a huge improvement
 ------
 
 <figure>
