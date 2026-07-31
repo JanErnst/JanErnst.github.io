@@ -100,11 +100,15 @@ Y^{t-1}Q_{y}^{t}
 \end{aligned}
 $$
 
-
 Atom type $\mathbf{X}$, bond type $\mathbf{Y}$ and formal charge $\mathbf{C}$ get discrete noise that is defined by the transition matrix Q that has been derived from the marginal distribution of the training sets for each feature. To ensure that the generated molecule stays centered in the subspace the total amount of applied gaussian noise has to always add up to 0. This ensures that the input and output are roto-translation equivariant during training and inference.  
 
- 
-The parameter α defines how much of the input remains in a single noise step and is changed during training according to the newly introduced adaptive noise schedule. Even though MiDi must balance all features of the graph to generate a stable molecule, atom coordinates and bond types have less flexibility in this regard and cannot be derived from atom type and formal charge. This is why during the noise application α for coordinates and bond type decreases slower than for atom type and formal charge. In the next chapter we will discuss what this means for the inference step, after exploring the architecture of the denoising model.
+The parameter α defines how much of the input remains in a single noise step and is changed during training according to the newly introduced adaptive noise schedule. Even though MiDi must balance all features of the graph to generate a stable molecule, atom coordinates and bond types have less flexibility in this regard and cannot be derived from atom type and formal charge. This is why during the noise application α for coordinates and bond type decreases slower than for atom type and formal charge.
+
+Adaptive cosine noise schedule
+![Adaptive cosine noise schedule](/images/adaptive_cosine_schedule.pdf)
+
+
+In the next chapter we will discuss what this means for the inference step, after exploring the architecture of the denoising model.
 
 Denoising model
 ------
@@ -200,10 +204,11 @@ w,\,
 \end{aligned}
 $$
 
-The complete update process extracts the 3D information from the current graph and then uses the $\Delta_r$, node, and global features to update the edge embeddings
+The complete update process extracts the 3D information from the current graph and then uses the $\Delta_r$, node, and global features to update the edge embeddings. Using more transformer architecture MiDi updates the node embeddings with the previously calculated attention coefficient. the flattend attention heads are then used to calculate the rGNN update and the final graph embedding. To do this MiDi uses PNA layers that use pooling to resize the embedding.
 
-noise s
-loss 
+After the updates have been concluded MiDi uses dropout for better Generalization and then normalizes all exept the graph features. Similar to MLP layer the normalization layer for the 3D coordinates is again modified to hold the E(3) equivariance.
+
+Finally, after repeating this proccess multiple times the MiDi uses a final MLP layer and returns its output values. 3D coordinates are returend as pointwise estimates while the atom type, formal charge and bond type are predicted distributions over all classes. The corresponding loss is therefore also a combination of regression loss for coordinations and cross-entropy loss for all other.
 
 $$
 \mathcal{L}(G,\hat{p}^{G}) =
@@ -212,6 +217,8 @@ $$
 + \lambda_c\,\mathrm{CE}\!\left(C,p_{\theta}^{C}\right)
 + \lambda_y\,\mathrm{CE}\!\left(Y,p_{\theta}^{Y}\right)
 $$
+
+
 
 Experiments:
 ======
