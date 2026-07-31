@@ -104,8 +104,10 @@ Atom type $\mathbf{X}$, bond type $\mathbf{Y}$ and formal charge $\mathbf{C}$ ge
 
 The parameter α defines how much of the input remains in a single noise step and is changed during training according to the newly introduced adaptive noise schedule. Even though MiDi must balance all features of the graph to generate a stable molecule, atom coordinates and bond types have less flexibility in this regard and cannot be derived from atom type and formal charge. This is why during the noise application α for coordinates and bond type decreases slower than for atom type and formal charge.
 
-Adaptive cosine noise schedule
-![Adaptive cosine noise schedule](/images/adaptive_cosine_schedule-1.png)
+<figure>
+  <img src="/images/adaptive_cosine_schedule-1.png" alt="Adaptive cosine noise schedule" style="display:block; margin:auto; width:80%"/>
+  <figcaption style="text-align:center">Figure 1: Adaptive cosine noise schedule.</figcaption>
+</figure>
 
 
 In the next chapter we will discuss what this means for the inference step, after exploring the architecture of the denoising model.
@@ -233,9 +235,13 @@ The authors compare MiDi against the Equivariant Diffusion Model (EDM) followed 
 
 The experiments are performed with explicit hydrogen atoms, which makes the task harder because the model has to place and connect all atoms, not only the heavy atoms. The authors evaluate on two datasets, depicted in the following table:
 
+| Information | QM9 | GEOM-DRUGS |
+|---|---|---|
+| **Dataset type** | Standard benchmark of small molecules | Large dataset of drug-sized, drug-like molecules |
+| **Number of molecules** | Approximately **133,000** molecules | Approximately **430,000** molecules |
+| **Molecule size** | Up to **9 heavy atoms** per molecule | Average of **44 atoms**, with up to **181 atoms** |
 
-
-QM9 has a lot less samples and contains small molecules with up to 9 heavy atoms. The GEOM-DRUGS data set on the other side is much more challenging and closer to realistic drug discovery. It contains around 430,000 drug-sized molecules, with an average of 44 atoms and up to 181 atoms. The evaluation combines graph-based and geometry-based metrics. 
+QM9 has a lot less samples and contains small molecules with up to 9 heavy atoms, which are all atoms except Hydrogen. The GEOM-DRUGS data set on the other side is much more challenging and closer to realistic drug discovery. It contains around 430,000 drug-sized molecules, with an average of 44 atoms and up to 181 atoms. The evaluation combines graph-based and geometry-based metrics.
 
 For the graph structure, the paper reports standard molecule generation metrics such as validity, uniqueness, novelty, and connectedness. Validity is measured using RDKit sanitization. The authors also report atom stability and molecule stability, which check whether valency constraints are satisfied without adding implicit hydrogens. 
 
