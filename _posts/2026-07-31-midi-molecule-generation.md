@@ -11,24 +11,24 @@ tags:
 
 Introduction to MiDi
 ======
-When designing a new drug, scientists often have to generate a new molecule that is not only stable but also satisfies every condition necessary for the desired effect. Since the explosive rise of generative models, it is no wonder that these topics have been combined in research. The authors Vignac, Osman, Toni & Frossard wanted to tackle this task too, and presented their model MiDi in the paper *MiDi: **Mi**xed Graph and 3D Denoising **Di**ffusion for Molecule Generation* (2023). In this blog post, I want to recap the architecture, novelties, and results of MiDi so even without deep AI knowledge you can understand what makes it special.
+When designing a new drug, scientists often have to generate a new molecule that is not only stable but also satisfies every condition necessary for the desired effect. Since the explosive rise of generative models, it is no wonder that these topics have been combined in research. The authors Vignac, Osman, Toni & Frossard wanted to tackle this task too, and presented their model MiDi in their paper *MiDi: **Mi**xed Graph and 3D Denoising **Di**ffusion for Molecule Generation* (2023). In this blog post, I want to recap the architecture, novelties, and results of MiDi so even without deep AI knowledge you can understand what makes it special.
 
-We will build up the motivation behind MiDi, explain why molecule generation needs both graph and 3D information, and look at how the model combines discrete diffusion for chemical properties with Gaussian diffusion for spatial coordinates. Finally, we will discuss why this joint approach leads to much more stable molecules on challenging drug-like datasets compared to similar models.
+We will explore the motivation behind MiDi, explain why molecule generation needs both graph and 3D information, and look at how the model combines discrete diffusion for chemical properties with Gaussian diffusion for spatial coordinates. Finally, we will discuss why this approach leads to much more stable molecules on challenging drug-like datasets compared to similar models.
 
 To do so, we will first discuss why it even makes sense to use neural networks for molecule generation, and cover the most important basics needed to understand how MiDi works and what is important when creating a molecule.
 
 Why even consider deep learning?
 ======
 
-When we think about generating molecules, we can reformulate it as a search problem with a new dimension for each feature of a molecule. The features that interest us here are the number of atoms, type of atoms, type of bond between all atoms, and three-dimensional structure. When we consider an average-sized drug of $\approx40$ atoms, we can already see how this results in an enormous search space of different combinations. Even though only a small number of all elements are actually used in drug synthesis, the possible structures in 3D space are near limitless. This search space would increase even further if we included special atom groups, but we will not discuss that further today. So at this point we can clearly say that randomly selecting a possible molecule will most likely not result in a viable new drug.
+When we think about generating molecules, we can reformulate it as a search problem with a new dimension for each feature of a molecule. The features that interest us here are the number of atoms, type of atoms, type of bond between all atoms, and three-dimensional structure. When we consider an average-sized drug of $\approx40$ atoms, we can already see how this results in an enormous search space of different combinations. Even though only a small number of all elements are actually used in drug synthesis, the possible structures in 3D space are near limitless. This search space would increase even further if we included special atom groups. So at this point we can clearly say that randomly selecting a possible molecule will most likely not result in a viable new drug.
 
-From all the chemical knowledge we have, we already know that not all combinations are possible and can therefore reduce the space by applying rules and constraints that apply to stable molecules. This opens the possibility of creating heuristic rule sets or algorithms to generate a molecule, right? Yes, but that really only works for small molecules. The larger a molecule gets, the more complex its configuration becomes, resulting in increasingly difficult prediction of its attributes and properties. Every new change can destabilize the molecule, and there is no single fixed order to follow when creating one. 
+Through the aquired chemical knowledge, we know that not all combinations are possible and can therefore reduce the space by applying rules and constraints that apply to stable molecules. This opens the possibility of creating heuristic rule sets or algorithms to generate a molecule, right? Yes, but that really only works for small molecules. The larger a molecule gets, the more complex its configuration becomes, resulting in increasingly difficult prediction of its attributes and properties. Every new change can destabilize the molecule, and there is no single fixed order to follow when creating one. This is where even advanced algorithms start to fail.
 
-To summarize, we have a huge search space combined with complex relations between the features. I do not know about you, but this already sounds like a solution where we should definitely apply deep learning, and this is what we will explore with MiDi.
+To summarize, we have a huge search space combined with complex relations between the features. I do not know about you, but this already sounds like a solution where we should definitely try to apply deep learning, and this is what we will explore with MiDi.
 
 What is special about MiDi?
 ======
-Before I can answer this question, I have to tell you something important about molecules. Molecules are often depicted as two-dimensional graphs. These representations define the chemical properties, bond and atom types, and functional groups that are essential for drugs. They are also important because scientists can derive the synthetic path from these graphs. But this is not enough: given a fixed 2D graph, we can create multiple fitting 3D arrangements, called conformers. The conformer defines how the molecule interacts with other molecules, controls its biological activity, and determines its binding affinity to proteins. The following figure 1 shows you an example of a two-dimensional graph and a fitting three-dimensional conformer.
+Before I can answer this question, I have to tell you something important about molecules. Molecules are often depicted as two-dimensional graphs. These representations define the chemical properties, bond and atom types, and functional groups that are essential for drugs. They are also used by scientists to derive the synthetic path of the molecule. But this is not enough: given a fixed 2D graph, we can create multiple fitting 3D arrangements, called conformers. The conformer defines how the molecule interacts with other molecules, controls its biological activity, and determines its binding affinity to proteins. The following figure 1 shows you an example of a two-dimensional graph and a fitting three-dimensional conformer.
 
 <figure>
   <img src="/images/mixed_graph.jpg" alt="mixed graph" style="display:block; margin:auto; width:80%"/>
@@ -45,7 +45,7 @@ This is the point where MiDi enters the stage. Unlike before, MiDi is the first 
   <figcaption style="text-align:center">Figure 2: Example output from MiDi.</figcaption>
 </figure>
 
-In the figure above, I give you a first glimpse at the generated molecules from MiDi, so you can imagine the 2D and 3D structures we are talking about in this post. As a side note: this is where the *Mixed* (Mi) part in the name comes from.
+In the figure 2 above, I give you a first glimpse at the generated molecules from MiDi, so you can imagine the 2D and 3D structures we are talking about in this post. As a side note: this is where the *Mixed* (Mi) part in the name comes from.
 
 
 We have to talk about some basics now
@@ -56,7 +56,7 @@ To fully grasp the process and architecture, we will now cover the background kn
 Molecules as graphs
 ------
 
-Previous works on molecule generation have already demonstrated the efficiency of graph structures. MiDi is no different in this regard and also represents its molecules as a graph. A graph generally consists of nodes and edges connecting them. Nodes represent the atoms of a molecule, the edges are the bonds between them, and both are described by their features. In the case of MiDi, each molecule built from $n$ atoms is represented as the graph $G = (\mathbf{X},\mathbf{C},\mathbf{R},\mathbf{Y})$ with $\mathbf{X}$ as the atom type and $\mathbf{C}$ as their formal charge, which are both one-hot encoded vectors of length $n$. $\mathbf{R}\in\mathbb{R}^{3 \times n}$ are the three-dimensional coordinates of all $n$ atoms and $\mathbf{Y}$ are the bond types between them, saved as an $n \times n$ matrix. Notably, having no bond is also considered to be a bond type. Atom type, formal charge and coordinates relate to an atom and are therefore node features, while the bond type is a edge feature, connecting two nodes. Looking at Figure 1 again, it becomes obvious why this representation fits a molecule so naturally and intuitively.
+Previous papers on molecule generation have already demonstrated the efficiency of graph structures. MiDi is no different in this regard and also represents its molecules as a graph. A graph generally consists of nodes and edges connecting them. Nodes represent the atoms of a molecule, the edges are the bonds between them, and both are described by their features. In the case of MiDi, each molecule built from $n$ atoms is represented as the graph $G = (\mathbf{X},\mathbf{C},\mathbf{R},\mathbf{Y})$ with $\mathbf{X}$ as the atom type and $\mathbf{C}$ as their formal charge, which are both one-hot encoded vectors of length $n$. $\mathbf{R}\in\mathbb{R}^{3 \times n}$ are the three-dimensional coordinates of all $n$ atoms and $\mathbf{Y}$ are the bond types between them, saved as a $n \times n$ matrix. Notably, having no bond is also considered to be a bond type. Atom type, formal charge and coordinates relate to an atom and are therefore node features, while the bond type is a edge feature, connecting two nodes. Looking at Figure 1 again, it becomes obvious why this representation fits a molecule so naturally and intuitively.
 
 E(3)-Equivariance
 ------
@@ -64,7 +64,7 @@ When generating any structure in space, we must respect its dynamic nature. Mole
 
 <figure>
   <img src="/images/equivariance.jpg" alt="Diagram showing that rotating the input graph by a transformation S_g and then passing it through the network gives the same result as first passing the original input through the network and then rotating the output by the same transformation." style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 3: The original input graph (top-left) is rotated by $S_g$ to produce a second input graph (top-right). Both graphs are processed by the neural network $\phi$. The key insight is that the second output (bottom-right) can be derived directly from the first output (bottom-left) by applying the same rotation $T_g = S_g$ — the network does not need to see every possible orientation during training. Source: <a href="https://arxiv.org/abs/2106.09645">E(n) Equivariant Graph Neural Networks (Satorras et al., 2021)</a>
+  <figcaption style="text-align:center">Figure 3: The original input graph (top-left) is rotated by $S_g$ to produce a second input graph (top-right). Both graphs are processed by the neural network $\phi$. The key insight is that the second output (bottom-right) can be derived directly from the first output (bottom-left) by applying the same rotation $T_g = S_g$. Source: <a href="https://arxiv.org/abs/2106.09645">E(n) Equivariant Graph Neural Networks (Satorras et al., 2021)</a>
   </figcaption>
 </figure>
 
@@ -96,10 +96,10 @@ With each step the original input gets more and more corrupted until it is, at l
 
 <figure>
   <img src="/images/Diffusion.png" alt="A sequence of images showing a cat being progressively corrupted by Gaussian noise over T timesteps until the original image is completely unrecognizable." style="display:block; margin:auto; width:80%"/>
-  <figcaption style="text-align:center">Figure 4: The forward noise process illustrated on an image. Starting from the clean input $G^0$ on the left, noise is added step by step until the original structure is completely destroyed at step $T$ on the right. The denoising model learns to reverse this process.</figcaption>
+  <figcaption style="text-align:center">Figure 4: The forward noise process illustrated on an image. Starting from the clean input $G^0$ on the left, noise is added step by step until the original structure is completely destroyed at step $T$ on the right.</figcaption>
 </figure>
 
-The purpose of the noise model lies in creating a noisy graph so that the denoising model can learn to reverse the noise. Generally, the denoising model can either predict the noise and reverse it in the same style as the noise model or predict the clean output directly. MiDi does the former. As already explained in previous sections, MiDi generates a graph described by its edges and node features. The 3D coordinates are continuous values while the remaining features are discrete values. The corresponding noise is therefore either continuous Gaussian for coordinates noise or discrete noise for the remaining features, resulting in the following combined noise at each step on each training sample:
+The purpose of the noise model lies in creating a noisy graph so that the denoising model can learn to reverse the noise. Generally, the denoising model can either predict the noise and reverse it in the same style as the noise model or predict the clean output directly. MiDi does the former. As already explained in previous sections, MiDi generates a clean graph described by its edges and node features. The 3D coordinates are continuous values while the remaining features are discrete values. The corresponding noise is therefore either continuous Gaussian for coordinates noise or discrete noise for the remaining features, resulting in the following combined noise at each step on each training sample:
 
 $$
 \begin{aligned}
@@ -139,7 +139,7 @@ Y^{t-1}Q_{y}^{t}
 \end{aligned}
 $$
 
-Atom type $\mathbf{X}$, bond type $\mathbf{Y}$, and formal charge $\mathbf{C}$ receive discrete noise defined by the transition matrix $Q^t$, which has been derived from the marginal distribution of the training set for each feature. To ensure that the generated molecule stays centered in the subspace, the total amount of applied Gaussian noise $\epsilon$ must always sum to zero $\sum_{i=1}^{n} \epsilon_i = 0$. This ensures that the input and output are roto-translation equivariant during training and inference.
+Atom type $\mathbf{X}$, bond type $\mathbf{Y}$, and formal charge $\mathbf{C}$ receive discrete noise defined by the transition matrix $Q^t$, which has been derived from the marginal distribution of the training set for each feature. All transition matrix $Q$ define the probablity of a feature to transfer from one class to another. To ensure that the generated molecule stays centered in the subspace, the total amount of applied Gaussian noise $\epsilon$ must always sum to zero $\sum_{i=1}^{n} \epsilon_i = 0$. This ensures that the input and output are roto-translation equivariant during training and inference.
 
 The parameter $\alpha$ defines how much of the input remains after a single noise step and is adjusted during training according to the newly introduced adaptive noise schedule in figure 5. Even though MiDi must balance all features of the graph to generate a stable molecule, atom coordinates and bond types have less flexibility in this regard, as they cannot be derived from atom type and formal charge alone. This is why, during noise application, $\alpha$ for coordinates and bond type decreases more slowly than for atom type and formal charge. If the denoising model then tries to reverse this problem, it will first generate a possible 3D structure and bond types and then fit them with atom types and formal charges to stabilize everything.
 
@@ -151,7 +151,7 @@ The parameter $\alpha$ defines how much of the input remains after a single nois
 Denoising model
 ------
 
-The denoising model is the main component of MiDi that is trained to generate clean mixed molecule graphs. In general, the second part of a diffusion model takes noisy data as input and returns a clean output. MiDi achieves this by learning to reverse the noise that the noise model applied to the original training data, and then applying this reversal to the noisy input graph. To do so, MiDi combines a transformer architecture with a mixed loss function, which we will now explore further.
+The denoising model is the main component of MiDi that is trained to generate clean mixed molecule graphs. In general, the second part of a diffusion model takes noisy data as input and returns a clean output. MiDi achieves this by learning to reverse the noise that has been added to the original training data, and then applying this reversal to the noisy input graph. To do so, MiDi combines a transformer architecture with a mixed loss function, which we will now explore further.
 
 First, we will look at the architecture from figure 6. At its core, the denoising model of MiDi is a multi-layer transformer graph neural network enclosed by multilayer perceptrons (MLPs). To understand what happens there, we will follow a sample through the network and discuss all parts of the denoising model, from input over hidden layers to loss.
 
@@ -168,7 +168,7 @@ MiDi has a transformer architecture that is built up from successive self-attent
   <figcaption style="text-align:center">Figure 6: Architecture of MiDi.</figcaption>
 </figure>
 
-Having already discussed the inputs, let us focus first on the separated, parallel MLPs for each feature. At first glance these appear to be standard MLPs, which they are — except for the MLP of the 3D coordinates. For molecule generation it is important to maintain E(3) equivariance, and therefore this MLP was adapted to satisfy that condition. To preserve E(3) equivariance, MiDi replaces the ordinary coordinate-wise MLP with a geometric PosMLP:
+Having already discussed the inputs, let us focus first on the separated, parallel MLPs for each feature. At first glance these appear to be standard MLPs, which they are — except for the MLP of the 3D coordinates. For molecule generation it is important to maintain E(3) equivariance, and therefore this MLP was adapted to fullfill that condition. To preserve E(3) equivariance, MiDi replaces the ordinary coordinate-wise MLP with a geometric PosMLP:
 
 $$
 \operatorname{PosMLP}(R)
@@ -183,19 +183,7 @@ $$
 
 it applies an MLP only to each atom’s rotation-invariant distance from the origin $\|\mathbf{R}\| \in \mathbb{R}^{n\times 1}$, then uses the result to rescale the atom’s direction vector and re-centers all coordinates to keep the molecular center of mass at zero.
 
-After the first MLP we enter the core of the network. We can see multiple E(3)+Graph Transformer layers that are all built the same way. Each begins with the so-called Update Block, which updates all features in sequence, starting with extracting the 3D information from the coordinates. This is done with the novel Relaxed Equivariant Graph Neural Networks (rEGNNs), which are based on Equivariant Graph Neural Networks (EGNNs). EGNNs are effective and efficient layers for processing 3D coordinates while maintaining E(3) equivariance. These layers recursively update each coordinate of the graph using only rotation-invariant arguments from the node and edge features.
-
-$$
-[\Delta r]_{ij}
-=
-\operatorname{cat}
-\left(
-\left\|r_i-r_j\right\|_2,\;
-\left\|r_i\right\|_2,\;
-\left\|r_j\right\|_2,\;
-\cos(r_i,r_j)
-\right).
-$$
+After the first MLP we enter the core of the network. We can see multiple E(3)+Graph Transformer layers that are all built the same way. Each begins with the so-called Update Block, which updates all features in sequence, starting with extracting the 3D information from the coordinates. This is done for the novel relaxed Equivariant Graph Neural Networks (rEGNNs), which are based on Equivariant Graph Neural Networks (EGNNs). EGNNs are effective and efficient layers for processing 3D coordinates while maintaining E(3) equivariance. These layers recursively update each coordinate of the graph using only rotation-invariant arguments from the node and edge features.
 
 In the case of MiDi, we can exploit the fact that our inputs are all centered around their center of mass (CoM) after the noise process. Therefore, the original formulation was *relaxed* to ignore translation and only use rotation-invariant descriptors (e.g., $\cos(r_i,r_j)$ or $\|r_j\|_2$). The new 3D information $\|r_i-r_j\|_2,\, \|r_i\|_2, \|r_j\|_2$ are all calculated relative to the zero center of mass and are rotation-invariant. Combined with the term $(r_i-r_j)$, they guarantee rotation equivariance.
 
@@ -236,6 +224,14 @@ x_i
 \operatorname{PNA}(\Delta_r),\,
 w
 \right) && \text{(Node Embeddings)} \\
+w
+\leftarrow
+\phi_w\!\left(
+w,\,
+\operatorname{PNA}(X),\,
+\operatorname{PNA}(\Delta_r),\,
+\operatorname{PNA}(Y)
+\right) && \text{(Graph Embeddings)} \\
 r_i
 \leftarrow
 r_i
@@ -246,18 +242,10 @@ r_i
 y_{ij}
 \right)
 (r_j-r_i) && \text{(rGNN Update)} \\
-w
-\leftarrow
-\phi_w\!\left(
-w,\,
-\operatorname{PNA}(X),\,
-\operatorname{PNA}(\Delta_r),\,
-\operatorname{PNA}(Y)
-\right) && \text{(Graph Embeddings)} \\
 \end{aligned}
 $$
 
-The complete update process extracts the 3D information from the current graph and then uses $\Delta_r$, node, and global features to update the edge embeddings. Using transformer attention, MiDi updates the node embeddings with the previously calculated attention coefficients. The flattened attention heads are then used to calculate the rEGNN update and the final graph embedding. To do this, MiDi uses PNA layers that use pooling to aggregate the embeddings.
+The complete update process extracts the 3D information from the current graph and then uses $\Delta_r$, node $\mathbf{X}$, and global features $\omega$ to update the edge embeddings $\mathbf{Y}$. Using transformer attention, MiDi updates the node embeddings $\mathbf{X}$ with the previously calculated attention coefficients $\alpha$. The flattened attention heads are then used to calculate final graph embedding. To do this, MiDi uses PNA layers for pooling pairwise features ($\mathbf{Y}$ and $\Delta_r$). In the last step the afore mentioned rEGNN layer updates the coordinates to keep E(3) equivariance.
 
 After the updates are complete, MiDi applies dropout for better generalization and then normalizes all features except the graph features. Similarly to the first MLP layer, the normalization layer for the 3D coordinates is again modified to maintain E(3) equivariance:
 
@@ -275,6 +263,7 @@ $$
 =
 \sqrt{\frac{1}{n}\sum_{i=1}^{n}\lVert r_i\rVert_2^2}
 $$
+
 Finally, after repeating this process multiple times, MiDi applies a final MLP layer and returns its output values. 3D coordinates are returned as pointwise estimates, while the atom type, formal charge, and bond type are predicted as distributions over all classes. The corresponding loss during training is therefore a combination of regression loss for coordinates and cross-entropy (CE) loss for all others.
 
 $$
@@ -296,7 +285,7 @@ That was a lot of math. But we did it and all you have to remember is that MiDi 
 How was MiDi tested?
 ======
 
-After introducing the model itself, the most important question for us should be whether generating the molecular graph and the 3D conformation together actually helps. To find that out, MiDi will now be asked to generate realistic molecules from the learned distribution after being trained on two different datasets. This setting is useful to evaluate the core ability of the model. A good molecule generator should not only place atoms in plausible 3D positions, but also assign chemically meaningful bonds, atom types, and formal charges.
+After introducing the model itself, the most important question for us should be whether generating the molecular graph and the 3D conformation together actually helps. To find that out, MiDi will now be asked to generate realistic molecules from the learned distribution after being trained on two different datasets. A good molecule generator should not only place atoms in plausible 3D positions, but also assign chemically meaningful bonds, atom types, and formal charges.
 
 Experimental setup
 ------
@@ -317,7 +306,7 @@ QM9 has far fewer samples and contains small molecules with up to 9 heavy atoms,
 |---|---|
 | **Molecule stability** | The molecule resists changing into other substances and does not break apart on its own. |
 | **Atom stability** | The atom's nucleus and electron arrangement are balanced and will not spontaneously change or break apart. |
-| **Validity** | Success rate of the RDKit sanitization pipeline over $10{,}000$ molecules. This defines whether the molecule is chemically valid. |
+| **Validity** | Success rate of the RDKit sanitization pipeline over 10000 molecules. This defines whether the molecule is chemically valid. |
 | **Uniqueness** | Proportion of valid generated molecules with different canonical SMILES. SMILES is a way to write a molecule as a simple line of text and therefore reflects the diversity of the generated molecules. This includes molecules that are already present in the training data. |
 | **Novelty** | Similar to Uniqueness, with the only difference being that the SMILES are not allowed to appear in the training data, therefore showing the model's ability to generate new molecules. |
 | **Connected** | All training molecules have a single connected compound, meaning every atom can be reached from any other atom by following the graph structure through its edges. |
@@ -327,13 +316,13 @@ QM9 has far fewer samples and contains small molecules with up to 9 heavy atoms,
 | **Angles\[$°$\]** | Angles between two bonds. |
 | **Bond Lengths\[$e^{-2}\text{Å}$\]** | Length of each occurring bond type. |
 
-For general molecule generation properties, the paper reports standard metrics such as molecule stability, atom stability, validity, uniqueness, novelty, and connectedness. The reported results show the proportion of generated molecules that satisfy the above-mentioned criteria. The metrics for valency, atom, and bond focus on comparing the distribution of the training dataset with the distribution of the generated dataset using the Wasserstein distance. This is a well-known measure of the similarity between two distributions. The results show the distance between the marginal distribution of the training and the generated dataset.
+For general molecule generation properties, the paper reports standard metrics such as molecule stability, atom stability, validity, uniqueness, novelty, and connectedness. The reported results show the proportion of generated molecules that satisfy the above-mentioned criteria from the generated samples. The metrics for valency, atom, and bond focus on comparing the distribution of the training dataset with the distribution of the generated dataset using the Wasserstein distance.
 
-Finally, MiDi is also evaluated as a 3D generator. The authors compare bond length and bond angle distributions between generated molecules and real molecules. This is important because a model could generate a valid graph but still place atoms in unrealistic 3D arrangements. Similarly to the previous metrics, these are also compared using the Wasserstein distance.
+Additionally, MiDi is evaluated as a 3D generator. The authors compare bond length and bond angle distributions between generated molecules and real molecules. This is important because a model could generate a valid graph but still place atoms in unrealistic 3D arrangements. Similarly to the previous metrics, these are also compared using the Wasserstein distance.
 
 Does MiDi work?
 ======
-In short: yes — but how well exactly? Now that we know how MiDi works and have established a basis for evaluation, let's first look at the smaller, simpler dataset. The following table gives a good picture for comparing the different results. Remember that EDM only generates 3D structures with atoms, but no bond types. We will focus on the EDM model without additional software, EDM assisted by OpenBabel to generate fitting bonds, and the MiDi model with the adaptive noise schedule. These results always show the comparison between the test set and the generated set. The data section of the results compares the test set with the training set to show the generalization ability of MiDi.
+In short: yes — but how well exactly? Now that we know how MiDi works and have established a basis for evaluation, let's first look at the smaller, simpler QM9 dataset. The following table gives a good picture for comparing the different results. Remember that EDM only generates 3D structures with atoms, but no bond types. We will focus on the EDM model with lookup table, EDM assisted by OpenBabel to generate fitting bonds, and the MiDi model with the adaptive noise schedule. The following results always show the comparison between the test set and the generated set. The data section of the results compares the test set with the training set to show the generalization ability of MiDi.
 
 So far not a huge improvement
 ------
@@ -361,7 +350,7 @@ Now that we have seen the results on the small dataset, I am sure you are as exc
   <figcaption style="text-align:center">Figure 9: Molecule generation metrics on GEOM-DRUGS. The advantage of MiDi's joint generation becomes clear here: while EDM alone achieves only $5.5\%$ molecular stability, MiDi reaches $91.6\%$ — showing that generating graph and 3D structure together is essential for drug-like molecules.</figcaption>
 </figure>
 
-This dataset contains larger, drug-like molecules with many more atoms and more complex structures. Here, the limitations of the two-step approach become obvious. EDM can generate reasonable-looking 3D point clouds, but when bonds are inferred afterwards, only $5.5\%$ of the resulting molecules are molecularly stable. Adding OpenBabel helps, increasing molecular stability to $40.3\%$, but this still leaves most generated molecules chemically problematic. MiDi performs much better on this harder benchmark. The adaptive version generates $91.6\%$ molecularly stable molecules, while also keeping atom stability close to the data distribution at $99.8\%$. This is the main result of the paper: jointly denoising the graph and the coordinates allows the model to learn chemistry and geometry as a coupled object, rather than treating bond prediction as an afterthought. In the end, MiDi is able to outperform EDM with and without OpenBabel on every molecule metric except Validity, where MiDi only reaches $77.8\%$.
+This dataset contains larger, drug-like molecules with many more atoms and more complex structures. Here, the limitations of the two-step approach become obvious. EDM can generate reasonable-looking 3D point clouds, but when bonds are inferred afterwards, only $5.5\%$ of the resulting molecules are molecularly stable. Adding OpenBabel helps, increasing molecular stability to $40.3\%$, but this still leaves most generated molecules chemically problematic. MiDi performs much better on this harder benchmark. The adaptive version generates $91.6\%$ molecularly stable molecules, while also keeping atom stability high at $99.8\%$. This is the main result of the paper: jointly denoising the graph and the coordinates allows the model to learn chemistry and geometry as a coupled object, rather than treating bond prediction as an afterthought. In the end, MiDi is able to outperform EDM with and without OpenBabel on every molecule metric except Validity, where MiDi only reaches $77.8\%$.
 
 <figure>
   <img src="/images/distribution_qm9.png" alt="Bar chart comparing the Wasserstein distances for valency, atom type, bond type, bond angle, and bond length distributions on GEOM-DRUGS between EDM, EDM with OpenBabel, and MiDi." style="display:block; margin:auto; width:80%"/>
